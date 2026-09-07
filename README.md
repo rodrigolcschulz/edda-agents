@@ -87,9 +87,9 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 ## 5. Roadmap (por fases)
 
 ### Fase 0 — Fundação
-- [ ] Setup do monorepo (backend/frontend/infra)
-- [ ] Postgres + pgvector rodando via Docker Compose
-- [ ] LangGraph "hello world": um grafo simples com 1 nó de LLM
+- [~] Setup inicial do monorepo (estrutura base de backend/frontend/infra)
+- [~] Postgres + pgvector configurado no Docker Compose; falta validar execução e migrations
+- [x] LangGraph "hello world": grafo com 1 nó de modelo, incluindo teste real com Ollama `qwen3:14b`
 - [ ] Langfuse rodando local, primeiro trace capturado
 
 ### Fase 1 — Engine de agente (o core técnico)
@@ -178,15 +178,17 @@ agentforge/
 
 ## 8. Próximo passo imediato
 
-Começar pela **Fase 0 + início da Fase 1**: subir o Docker Compose (Postgres + Langfuse), criar o schema declarativo de agente, e fazer o primeiro grafo LangGraph rodar de ponta a ponta com um trace aparecendo no Langfuse. Isso já prova o conceito central antes de investir tempo no builder visual.
+Concluir a **Fase 0** adicionando o Langfuse ao Docker Compose, configurando as variáveis de ambiente e capturando o primeiro trace do fluxo `LangGraph -> Ollama`. Depois, avançar para o interpretador de definições declarativas e o roteamento de modelos da Fase 1.
 
 ---
 
 ## 9. Fundação implementada
 
-O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist e uma API FastAPI.
+O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI e um grafo LangGraph mínimo com adaptador para Ollama.
 
-Também foram incluídos testes do fluxo, bloqueio por regra e memória de thread, além de Postgres com pgvector em `infra/docker-compose.yml`.
+Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário e execução do grafo com modelo local. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
+
+Legenda do roadmap: `[x]` concluído, `[~]` parcialmente concluído, `[ ]` pendente.
 
 ### Executar localmente
 

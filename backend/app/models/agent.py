@@ -43,6 +43,7 @@ class RunRequest(BaseModel):
     user_id: str
     message: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    confirmed_tools: list[str] = Field(default_factory=list)
 
 
 class RunStep(BaseModel):
