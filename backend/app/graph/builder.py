@@ -23,7 +23,7 @@ class AgentGraphState(TypedDict, total=False):
     answer: str
     status: str
     steps: list[RunStep]
-    model: Model | None
+    model_name: str
     loop_count: int
     should_continue: bool
 
@@ -91,10 +91,11 @@ class GraphBuilder:
                     if len(state["result"]) >= agent.model_router.complexity_threshold
                     else agent.model_router.simple_model
                 )
-            return {"model": self._models.get(model_name, self._default_model)}
+            return {"model_name": model_name}
 
         def reflect(state: AgentGraphState) -> AgentGraphState:
-            answer = self._reflector(agent, state["result"], state["memories"], state.get("model"))
+            model = self._models.get(state["model_name"], self._default_model)
+            answer = self._reflector(agent, state["result"], state["memories"], model)
             loop_count = state["loop_count"] + 1
             return {
                 "answer": answer,

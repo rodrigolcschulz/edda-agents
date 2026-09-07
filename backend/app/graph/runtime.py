@@ -32,6 +32,9 @@ class AgentRuntime:
         self._continuation_policy = continuation_policy or self._is_resolved
         self._checkpointer = checkpointer
 
+    def set_checkpointer(self, checkpointer: Any | None) -> None:
+        self._checkpointer = checkpointer
+
     def run(self, agent: AgentDefinition, request: RunRequest) -> RunResponse:
         graph = GraphBuilder(
             tools=self._tools,

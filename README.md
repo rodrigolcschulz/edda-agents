@@ -100,7 +100,7 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Nó de roteamento de modelo (ex: pergunta simples → modelo barato, complexa → modelo forte)
 - [x] Loop **plan → act → reflect**: o agente planeja, executa tool, reflete se resolveu, decide continuar ou responder
 - [x] Checkpointer Postgres (memória de curto prazo por thread)
-- [ ] Tool calling com sandbox (nunca `eval()` direto do input do usuário)
+- [x] Tool calling com sandbox (nunca `eval()` direto do input do usuário)
 
 ### Fase 2 — RAG e memória de longo prazo
 - [ ] Ingestão de documentos → chunking → embeddings → pgvector

@@ -4,6 +4,7 @@ from app.observability.langfuse import LangfuseClient
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, AgentRule, ModelRouterDefinition, RuleStage, RunRequest, ToolDefinition
 from app.tools.registry import ToolRegistry
+from app.tools.sandbox import DockerToolSandbox, SandboxedTool
 
 
 def make_runtime() -> AgentRuntime:
@@ -100,6 +101,36 @@ def test_runtime_loops_until_reflection_resolves_or_max_steps() -> None:
 
     assert response.status == "completed"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect", "plan", "act", "reflect"]
+
+
+def test_docker_tool_sandbox_disables_network_and_limits_resources(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return type("Completed", (), {"stdout": "sandboxed result\n"})()
+
+    monkeypatch.setattr("app.tools.sandbox.subprocess.run", fake_run)
+
+    result = DockerToolSandbox().execute(
+        SandboxedTool(image="tool-image", command=("tool", "echo")),
+        "untrusted input",
+    )
+
+    assert result == "sandboxed result"
+    assert captured["command"] == (
+        "docker", "run", "--rm", "--interactive", "--network", "none", "--read-only", "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges", "--pids-limit", "64", "--memory", "128m",
+        "--cpus", "0.5", "--user", "65534:65534", "tool-image", "tool", "echo",
+    )
+    assert captured["kwargs"] == {
+        "input": '{"argument": "untrusted input"}',
+        "text": True,
+        "capture_output": True,
+        "check": True,
+        "timeout": 10.0,
+    }
 
 
 def test_input_rule_blocks_before_execution() -> None:

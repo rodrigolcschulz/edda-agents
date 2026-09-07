@@ -1,6 +1,12 @@
 name: edda-agents
 
 services:
+  tool-runner:
+    build:
+      context: ../backend/tool_runner
+    image: edda-agents-tool-runner
+    command: ["sleep", "infinity"]
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -26,6 +32,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      tool-runner:
+        condition: service_started
     ports:
       - "8000:8000"
     environment:
@@ -36,6 +44,8 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   frontend:
     build:
