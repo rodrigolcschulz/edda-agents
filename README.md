@@ -69,6 +69,8 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 
 > **Nota sobre LangSmith:** ele NÃO é open-source (plataforma fechada, self-host só em plano Enterprise). Por isso o tracing fica com Langfuse, que é MIT e self-hostável em todos os planos.
 
+> **Política de custos:** o ambiente local usa Ollama para inferência e Langfuse self-hosted para observabilidade. Não dependemos de APIs pagas ou do Langfuse Cloud. O core do Langfuse é MIT; componentes Enterprise (`ee/`) possuem licença própria e não são necessários para este projeto.
+
 ---
 
 ## 4. Modelo de dados (núcleo)
@@ -87,10 +89,10 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 ## 5. Roadmap (por fases)
 
 ### Fase 0 — Fundação
-- [~] Setup inicial do monorepo (estrutura base de backend/frontend/infra)
-- [~] Postgres + pgvector configurado no Docker Compose; falta validar execução e migrations
+- [x] Setup inicial do monorepo (backend, frontend React/Vite e infra)
+- [x] Postgres + pgvector rodando no Docker Compose, com schema inicial, pgvector e RLS por tenant
 - [x] LangGraph "hello world": grafo com 1 nó de modelo, incluindo teste real com Ollama `qwen3:14b`
-- [ ] Langfuse rodando local, primeiro trace capturado
+- [x] Cliente de ingestão Langfuse integrado ao grafo e stack self-hosted local iniciado via Docker Compose
 
 ### Fase 1 — Engine de agente (o core técnico)
 - [ ] Definição declarativa de agente (schema JSON/Pydantic)
@@ -178,7 +180,7 @@ agentforge/
 
 ## 8. Próximo passo imediato
 
-Concluir a **Fase 0** adicionando o Langfuse ao Docker Compose, configurando as variáveis de ambiente e capturando o primeiro trace do fluxo `LangGraph -> Ollama`. Depois, avançar para o interpretador de definições declarativas e o roteamento de modelos da Fase 1.
+Concluir a **Fase 0** adicionando o stack Langfuse ao ambiente local, configurando as variáveis de ambiente de `.env.example` e capturando o primeiro trace do fluxo `LangGraph -> Ollama`. O cliente de tracing já está integrado, mas o Docker daemon precisa estar ativo para validar a ingestão. Depois, avançar para o interpretador de definições declarativas e o roteamento de modelos da Fase 1.
 
 ---
 
@@ -186,7 +188,7 @@ Concluir a **Fase 0** adicionando o Langfuse ao Docker Compose, configurando as 
 
 O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI e um grafo LangGraph mínimo com adaptador para Ollama.
 
-Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário e execução do grafo com modelo local. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
+Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário, execução do grafo com modelo local e instrumentação opcional para Langfuse. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
 
 Legenda do roadmap: `[x]` concluído, `[~]` parcialmente concluído, `[ ]` pendente.
 
@@ -199,6 +201,32 @@ pip install -e ".[dev]"
 docker compose -f infra/docker-compose.yml up -d
 uvicorn app.main:app --app-dir backend --reload
 ```
+
+Para habilitar o tracing, copie `.env.example` para `.env` e preencha as chaves do Langfuse. Sem as duas chaves, o cliente permanece desabilitado. O painel local do Langfuse fica em `http://localhost:3001`.
+
+Para aplicar o schema inicial no Postgres da AgentForge:
+
+```bash
+docker compose -f infra/docker-compose.yml exec -T postgres psql -U agentforge -d agentforge -f - < infra/migrations/001_initial.sql
+```
+
+Para iniciar a sandbox React em desenvolvimento:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+A sandbox fica em `http://localhost:5173` e consome a API em `http://localhost:8000`.
+
+Para subir o ambiente completo containerizado, incluindo backend e frontend:
+
+```bash
+docker compose -f infra/docker-compose.yml up --build -d
+```
+
+O projeto Docker usa o nome `agent-forge`, então os containers aparecem como `agent-forge-backend-1`, `agent-forge-frontend-1` e assim por diante. URLs locais: frontend em `http://localhost:5173`, API em `http://localhost:8000` e Langfuse em `http://localhost:3001`.
 
 API: `GET /health` e `POST /v1/agents/run`.
 

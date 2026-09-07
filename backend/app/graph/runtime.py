@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections.abc import Callable
 
 from app.guardrails.rules import RuleViolation, enforce_rules
 from app.memory.store import InMemoryStore
@@ -14,9 +15,10 @@ class Plan:
 
 
 class AgentRuntime:
-    def __init__(self, tools: ToolRegistry, memory: InMemoryStore) -> None:
+    def __init__(self, tools: ToolRegistry, memory: InMemoryStore, model: Callable[[str], str] | None = None) -> None:
         self._tools = tools
         self._memory = memory
+        self._model = model
 
     def run(self, agent: AgentDefinition, request: RunRequest) -> RunResponse:
         steps: list[RunStep] = []
@@ -67,7 +69,9 @@ class AgentRuntime:
     def _is_confirmed(tool_name: str, confirmed_tools: list[str]) -> bool:
         return any(tool_name.casefold() == confirmed.casefold() for confirmed in confirmed_tools)
 
-    @staticmethod
-    def _reflect(agent: AgentDefinition, result: str, memories: list[str]) -> str:
+    def _reflect(self, agent: AgentDefinition, result: str, memories: list[str]) -> str:
         context = f" Previous context: {' | '.join(memories)}." if memories else ""
+        if self._model:
+            prompt = f"System: {agent.system_prompt}\nUser request: {result}{context}"
+            return self._model(prompt)
         return f"{agent.name}: {result}{context}"

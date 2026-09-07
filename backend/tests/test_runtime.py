@@ -1,5 +1,6 @@
 from app.graph.runtime import AgentRuntime
 from app.graph.hello import OllamaModel, build_hello_graph
+from app.observability.langfuse import LangfuseClient
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, AgentRule, RuleStage, RunRequest, ToolDefinition
 from app.tools.registry import ToolRegistry
@@ -26,6 +27,22 @@ def test_runs_plan_act_reflect_cycle() -> None:
     assert response.status == "completed"
     assert response.answer == "Support: result for Use echo for this request"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect"]
+
+
+def test_runtime_can_use_an_injected_model_for_reflection() -> None:
+    agent = AgentDefinition(id="support", name="Support", system_prompt="Help the user.")
+    runtime = AgentRuntime(
+        tools=ToolRegistry(),
+        memory=InMemoryStore(),
+        model=lambda prompt: f"model response: {prompt}",
+    )
+
+    response = runtime.run(
+        agent,
+        RunRequest(thread_id="thread-1", user_id="user-1", message="Explain memory"),
+    )
+
+    assert response.answer == "model response: System: Help the user.\nUser request: Explain memory"
 
 
 def test_input_rule_blocks_before_execution() -> None:
@@ -111,3 +128,19 @@ def test_ollama_model_parses_chat_response(monkeypatch) -> None:
     monkeypatch.setattr("app.graph.hello.urlopen", lambda *args, **kwargs: FakeResponse())
 
     assert OllamaModel(model="qwen3:14b")("hello") == "local answer"
+
+
+def test_langgraph_records_generation_when_langfuse_is_configured(monkeypatch) -> None:
+    captured: list[dict[str, str]] = []
+    tracer = LangfuseClient(public_key="public", secret_key="secret")
+    monkeypatch.setattr(
+        tracer,
+        "record_generation",
+        lambda **fields: captured.append(fields) or "generation-id",
+    )
+
+    result = build_hello_graph(model=lambda message: "answer", tracer=tracer).invoke({"message": "hello"})
+
+    assert result["response"] == "answer"
+    assert captured[0]["name"] == "hello-llm"
+    assert captured[0]["input_text"] == "hello"

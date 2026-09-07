@@ -1,10 +1,13 @@
 from collections.abc import Callable
 import json
+import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+
+from app.observability.langfuse import LangfuseClient
 
 
 class HelloState(TypedDict, total=False):
@@ -16,9 +19,9 @@ Model = Callable[[str], str]
 
 
 class OllamaModel:
-    def __init__(self, model: str = "qwen3:14b", base_url: str = "http://localhost:11434", timeout: float = 120.0) -> None:
+    def __init__(self, model: str = "qwen3:14b", base_url: str | None = None, timeout: float = 120.0) -> None:
         self.model = model
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
         self.timeout = timeout
 
     def __call__(self, message: str) -> str:
@@ -52,9 +55,17 @@ def deterministic_model(message: str) -> str:
     return f"Deterministic response: {message}"
 
 
-def build_hello_graph(model: Model = deterministic_model):
+def build_hello_graph(model: Model = deterministic_model, tracer: LangfuseClient | None = None):
     def llm_node(state: HelloState) -> HelloState:
-        return {"response": model(state["message"])}
+        response = model(state["message"])
+        if tracer:
+            tracer.record_generation(
+                name="hello-llm",
+                input_text=state["message"],
+                output_text=response,
+                model=getattr(model, "model", "custom"),
+            )
+        return {"response": response}
 
     graph = StateGraph(HelloState)
     graph.add_node("llm", llm_node)
