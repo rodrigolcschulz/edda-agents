@@ -1,4 +1,4 @@
-# AgentForge — Plataforma de Criação de Agentes de IA
+# Edda Agents — Plataforma de Criação de Agentes de IA
 
 > Plataforma self-service onde usuários criam, testam e publicam agentes de IA (LLM + tools + RAG + memória) através de um builder visual, com observabilidade e governança de nível de produção.
 
@@ -204,7 +204,7 @@ uvicorn app.main:app --app-dir backend --reload
 
 Para habilitar o tracing, copie `.env.example` para `.env` e preencha as chaves do Langfuse. Sem as duas chaves, o cliente permanece desabilitado. O painel local do Langfuse fica em `http://localhost:3001`.
 
-Para aplicar o schema inicial no Postgres da AgentForge:
+Para aplicar o schema inicial no Postgres da Edda Agents:
 
 ```bash
 docker compose -f infra/docker-compose.yml exec -T postgres psql -U agentforge -d agentforge -f - < infra/migrations/001_initial.sql

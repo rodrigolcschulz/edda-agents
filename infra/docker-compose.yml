@@ -1,19 +1,19 @@
-name: agent-forge
+name: edda-agents
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: agentforge
-      POSTGRES_USER: agentforge
-      POSTGRES_PASSWORD: agentforge
+      POSTGRES_DB: edda_agents
+      POSTGRES_USER: edda_agents
+      POSTGRES_PASSWORD: edda_agents
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentforge -d agentforge"]
+      test: ["CMD-SHELL", "pg_isready -U edda_agents -d edda_agents"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -155,15 +155,15 @@ services:
       NEXTAUTH_URL: ${LANGFUSE_HOST:-http://localhost:3001}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-local-secret}
       LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
-      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-agentforge}
-      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-AgentForge}
-      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-agentforge-local}
-      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-AgentForge Local}
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-edda-agents}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-Edda Agents}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-edda-agents-local}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-Edda Agents Local}
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
-      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@agentforge.local}
-      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-AgentForge Admin}
-      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-agentforge-local-password}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@edda-agents.local}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Edda Agents Admin}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-edda-agents-local-password}
 
 volumes:
   postgres_data:

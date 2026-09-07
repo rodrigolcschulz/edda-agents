@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Activity, ArrowUpRight, Bot, BrainCircuit, Check, CircleAlert, Clock3, Database, Layers3, LoaderCircle, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import brandLogo from "../assets/Gemini_Generated_Image_gcutwjgcutwjgcut.jpg";
+import agentIcon from "../assets/Gemini_Generated_Image_3tesah3tesah3tes.jpg";
 
 type RunStep = { name: string; detail: string };
 type RunResponse = {
@@ -53,7 +55,7 @@ export default function App() {
   return (
     <main className="shell">
       <header className="topbar">
-        <div className="brand"><span className="brand-mark"><Bot size={18} /></span><span>AgentForge</span><span className="env-pill">LOCAL</span></div>
+        <div className="brand"><span className="brand-mark"><img src={brandLogo} alt="Edda Agents" /></span><span>Edda Agents</span><span className="env-pill">LOCAL</span></div>
         <div className="topbar-meta"><span className="status-dot" /> Runtime online <span className="divider" /> <span>Sandbox / Atlas Support</span></div>
       </header>
 
@@ -63,7 +65,7 @@ export default function App() {
           <h1>Atlas Support</h1>
           <p className="muted">Um agente local para testar memória, tools e comportamento antes da publicação.</p>
           <div className="agent-card">
-            <div className="agent-card-header"><span className="avatar"><BrainCircuit size={17} /></span><div><strong>Atlas Support</strong><small>Draft · v0.1</small></div><ArrowUpRight size={15} /></div>
+            <div className="agent-card-header"><span className="avatar"><img src={agentIcon} alt="" /></span><div><strong>Atlas Support</strong><small>Draft · v0.1</small></div><ArrowUpRight size={15} /></div>
             <div className="card-line"><span>Model</span><b>{agent.model}</b></div>
             <div className="card-line"><span>Memory</span><b className="green">Thread enabled</b></div>
           </div>
@@ -79,7 +81,7 @@ export default function App() {
           <div className="panel-heading"><div><div className="eyebrow">Execution lab</div><h2>Test your agent</h2></div><div className="run-count"><span className="pulse" /> Ready to run</div></div>
           <div className="chat-surface">
             <div className="chat-intro"><span className="intro-icon"><Bot size={22} /></span><div><strong>Atlas Support is ready</strong><p>Send a message to inspect the complete execution path.</p></div></div>
-            {response ? <div className="answer"><div className="message-label"><span className="avatar small"><Bot size={13} /></span> Atlas Support <time>just now</time></div><div className="answer-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{response.answer}</ReactMarkdown></div></div> : <div className="empty-state"><span>01</span><p>Your response will appear here.<br /><small>Every run is recorded as an inspectable sequence.</small></p></div>}
+            {response ? <div className="answer"><div className="message-label"><span className="avatar small"><img src={agentIcon} alt="" /></span> Atlas Support <time>just now</time></div><div className="answer-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{response.answer}</ReactMarkdown></div></div> : <div className="empty-state"><span>01</span><p>Your response will appear here.<br /><small>Every run is recorded as an inspectable sequence.</small></p></div>}
             {error && <div className="error-message"><CircleAlert size={16} /> {error}</div>}
             <form className="composer" onSubmit={runAgent}><textarea value={message} onChange={(event) => setMessage(event.target.value)} aria-label="Message" /><button type="submit" disabled={loading} title="Run agent">{loading ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}<span>{loading ? "Running" : "Run agent"}</span></button></form>
           </div>
