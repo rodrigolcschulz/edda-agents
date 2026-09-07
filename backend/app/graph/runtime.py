@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from collections.abc import Callable
+from typing import Any
 
-from app.guardrails.rules import RuleViolation, enforce_rules
+from app.graph.builder import ContinuationPolicy, GraphBuilder, Model
 from app.memory.store import InMemoryStore
-from app.models.agent import AgentDefinition, RuleStage, RunRequest, RunResponse, RunStep, ToolDefinition
+from app.models.agent import AgentDefinition, RunRequest, RunResponse, ToolDefinition
 from app.tools.registry import ToolRegistry
 
 
@@ -15,48 +16,44 @@ class Plan:
 
 
 class AgentRuntime:
-    def __init__(self, tools: ToolRegistry, memory: InMemoryStore, model: Callable[[str], str] | None = None) -> None:
+    def __init__(
+        self,
+        tools: ToolRegistry,
+        memory: InMemoryStore,
+        model: Callable[[str], str] | None = None,
+        models: dict[str, Model] | None = None,
+        continuation_policy: ContinuationPolicy | None = None,
+        checkpointer: Any | None = None,
+    ) -> None:
         self._tools = tools
         self._memory = memory
         self._model = model
+        self._models = models
+        self._continuation_policy = continuation_policy or self._is_resolved
+        self._checkpointer = checkpointer
 
     def run(self, agent: AgentDefinition, request: RunRequest) -> RunResponse:
-        steps: list[RunStep] = []
-        try:
-            enforce_rules(request.message, agent.rules, RuleStage.INPUT)
-        except RuleViolation as error:
-            return RunResponse(thread_id=request.thread_id, answer=str(error), status="blocked", steps=steps)
-
-        memories = self._memory.recall(request.thread_id, request.user_id)
-        steps.append(RunStep(name="memory", detail=f"Recalled {len(memories)} item(s)."))
-        plan = self._plan(agent, request.message)
-        steps.append(RunStep(name="plan", detail=plan.reason))
-
-        result = request.message
-        if plan.tool_name:
-            if plan.tool and plan.tool.requires_confirmation and not self._is_confirmed(
-                plan.tool.name, request.confirmed_tools
-            ):
-                steps.append(RunStep(name="confirmation", detail=f"Confirmation required for tool '{plan.tool.name}'."))
-                return RunResponse(
-                    thread_id=request.thread_id,
-                    answer=f"Confirmation required for tool '{plan.tool.name}'.",
-                    status="confirmation_required",
-                    steps=steps,
-                    memories_used=memories,
-                )
-            result = self._tools.execute(plan.tool_name, request.message)
-            steps.append(RunStep(name="act", detail=f"Executed tool '{plan.tool_name}'."))
-
-        answer = self._reflect(agent, result, memories)
-        steps.append(RunStep(name="reflect", detail="Produced final response."))
-        try:
-            enforce_rules(answer, agent.rules, RuleStage.OUTPUT)
-        except RuleViolation as error:
-            return RunResponse(thread_id=request.thread_id, answer=str(error), status="blocked", steps=steps, memories_used=memories)
-
-        self._memory.remember_message(request.thread_id, request.user_id, request.message)
-        return RunResponse(thread_id=request.thread_id, answer=answer, status="completed", steps=steps, memories_used=memories)
+        graph = GraphBuilder(
+            tools=self._tools,
+            memory=self._memory,
+            planner=self._plan,
+            reflector=self._reflect,
+            continuation_policy=self._continuation_policy,
+            default_model=self._model,
+            models=self._models,
+            checkpointer=self._checkpointer,
+        ).build(agent)
+        result = graph.invoke(
+            {"request": request, "steps": [], "loop_count": 0},
+            {"configurable": {"thread_id": request.thread_id}},
+        )
+        return RunResponse(
+            thread_id=request.thread_id,
+            answer=result["answer"],
+            status=result["status"],
+            steps=result.get("steps", []),
+            memories_used=result.get("memories", []),
+        )
 
     def _plan(self, agent: AgentDefinition, message: str) -> Plan:
         message_lower = message.casefold()
@@ -66,12 +63,13 @@ class AgentRuntime:
         return Plan(tool_name=None, reason="Answer without a tool.")
 
     @staticmethod
-    def _is_confirmed(tool_name: str, confirmed_tools: list[str]) -> bool:
-        return any(tool_name.casefold() == confirmed.casefold() for confirmed in confirmed_tools)
-
-    def _reflect(self, agent: AgentDefinition, result: str, memories: list[str]) -> str:
+    def _reflect(agent: AgentDefinition, result: str, memories: list[str], model: Model | None) -> str:
         context = f" Previous context: {' | '.join(memories)}." if memories else ""
-        if self._model:
+        if model:
             prompt = f"System: {agent.system_prompt}\nUser request: {result}{context}"
-            return self._model(prompt)
+            return model(prompt)
         return f"{agent.name}: {result}{context}"
+
+    @staticmethod
+    def _is_resolved(agent: AgentDefinition, loop_count: int, answer: str) -> bool:
+        return False

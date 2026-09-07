@@ -95,11 +95,11 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Cliente de ingestão Langfuse integrado ao grafo e stack self-hosted local iniciado via Docker Compose
 
 ### Fase 1 — Engine de agente (o core técnico)
-- [ ] Definição declarativa de agente (schema JSON/Pydantic)
-- [ ] Interpretador: definição → grafo LangGraph dinâmico
-- [ ] Nó de roteamento de modelo (ex: pergunta simples → modelo barato, complexa → modelo forte)
-- [ ] Loop **plan → act → reflect**: o agente planeja, executa tool, reflete se resolveu, decide continuar ou responder
-- [ ] Checkpointer Postgres (memória de curto prazo por thread)
+- [x] Definição declarativa de agente (schema JSON/Pydantic)
+- [x] Interpretador: definição → grafo LangGraph dinâmico
+- [x] Nó de roteamento de modelo (ex: pergunta simples → modelo barato, complexa → modelo forte)
+- [x] Loop **plan → act → reflect**: o agente planeja, executa tool, reflete se resolveu, decide continuar ou responder
+- [x] Checkpointer Postgres (memória de curto prazo por thread)
 - [ ] Tool calling com sandbox (nunca `eval()` direto do input do usuário)
 
 ### Fase 2 — RAG e memória de longo prazo

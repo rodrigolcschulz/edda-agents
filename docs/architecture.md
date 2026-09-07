@@ -7,10 +7,10 @@
 3. O planejador escolhe uma tool permitida ou uma resposta direta.
 4. A acao executa somente uma tool registrada; MCP passa pela allowlist do gateway.
 5. A reflexao forma a resposta final e aplica regras de saida.
-6. A mensagem e adicionada a memoria de curto prazo da thread.
+6. O estado da execucao e persistido pelo checkpointer do LangGraph, separado por `thread_id`.
 
 ## Limites atuais
 
-- `InMemoryStore` e um adaptador de desenvolvimento. Postgres e pgvector o substituirao em producao.
+- `InMemoryStore` e um adaptador de desenvolvimento para memoria de longo prazo. O estado de curto prazo da execucao usa `PostgresSaver` quando `DATABASE_URL` esta configurada.
 - `McpGateway` define a fronteira de autorizacao; o cliente de transporte MCP sera conectado depois.
 - O planejador deterministico permite testes sem provedor de LLM. Um adaptador LangGraph/LLM pode preservar o contrato `AgentRuntime`.

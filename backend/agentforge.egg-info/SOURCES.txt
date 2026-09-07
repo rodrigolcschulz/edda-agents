@@ -8,6 +8,7 @@ backend/agentforge.egg-info/top_level.txt
 backend/app/__init__.py
 backend/app/main.py
 backend/app/graph/__init__.py
+backend/app/graph/builder.py
 backend/app/graph/hello.py
 backend/app/graph/runtime.py
 backend/app/guardrails/__init__.py

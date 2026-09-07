@@ -27,11 +27,18 @@ class McpServerDefinition(BaseModel):
     allowed_tools: list[str] = Field(default_factory=list)
 
 
+class ModelRouterDefinition(BaseModel):
+    simple_model: str
+    complex_model: str
+    complexity_threshold: int = Field(default=120, ge=1)
+
+
 class AgentDefinition(BaseModel):
     id: str
     name: str
     system_prompt: str
     model: str = "local-deterministic"
+    model_router: ModelRouterDefinition | None = None
     tools: list[ToolDefinition] = Field(default_factory=list)
     rules: list[AgentRule] = Field(default_factory=list)
     mcp_servers: list[McpServerDefinition] = Field(default_factory=list)
