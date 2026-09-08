@@ -43,6 +43,8 @@ class AgentDefinition(BaseModel):
     rules: list[AgentRule] = Field(default_factory=list)
     mcp_servers: list[McpServerDefinition] = Field(default_factory=list)
     max_steps: int = Field(default=3, ge=1, le=10)
+    retrieval_enabled: bool = False
+    retrieval_top_k: int = Field(default=3, ge=1, le=10)
 
 
 class RunRequest(BaseModel):

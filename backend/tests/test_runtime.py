@@ -1,3 +1,5 @@
+import time
+
 from app.graph.runtime import AgentRuntime
 from app.graph.hello import OllamaModel, build_hello_graph
 from app.observability.langfuse import LangfuseClient
@@ -192,6 +194,39 @@ def test_thread_memory_isolated_between_users() -> None:
     response = runtime.run(agent, RunRequest(thread_id="shared", user_id="user-2", message="Hello"))
 
     assert response.memories_used == []
+
+
+def test_runtime_uses_retrieval_context_when_enabled() -> None:
+    memory = InMemoryStore()
+    memory.ingest_document("support-policy", "Refunds are processed in 5-7 business days.")
+    runtime = AgentRuntime(tools=ToolRegistry(), memory=memory, model=lambda prompt: prompt)
+    agent = AgentDefinition(
+        id="rag",
+        name="RAG",
+        system_prompt="Use the support docs when relevant.",
+        retrieval_enabled=True,
+        retrieval_top_k=3,
+    )
+
+    response = runtime.run(
+        agent,
+        RunRequest(thread_id="thread-rag", user_id="user-1", message="When will my refund be processed?"),
+    )
+
+    assert "Refunds are processed in 5-7 business days." in response.answer
+
+
+def test_long_term_memory_expires_and_searches_by_similarity() -> None:
+    memory = InMemoryStore()
+    memory.ingest_document("shipping", "Orders are shipped in 2-3 business days.")
+    memory.remember_fact("user-1", "My favorite color is blue.")
+    memory.remember_fact("user-1", "I live in São Paulo.", ttl_seconds=0.05)
+
+    assert memory.search_documents("How long does shipping take?", limit=1)[0].text == "Orders are shipped in 2-3 business days."
+    assert any("favorite color" in fact.lower() for fact in memory.search_facts("user-1", "What colors do I like?"))
+
+    time.sleep(0.1)
+    assert memory.search_facts("user-1", "Where do I live?") == []
 
 
 def test_langgraph_hello_runs_one_llm_node() -> None:

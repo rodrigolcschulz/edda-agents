@@ -103,16 +103,16 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Tool calling com sandbox (nunca `eval()` direto do input do usuário)
 
 ### Fase 2 — RAG e memória de longo prazo
-- [ ] Ingestão de documentos → chunking → embeddings → pgvector
-- [ ] Nó de retrieval no grafo (RAG condicional: só busca se precisar)
-- [ ] Extração de memória de longo prazo (fatos relevantes por usuário, com embedding)
-- [ ] Estratégia de "esquecimento"/TTL de memória
+- [x] Ingestão de documentos → chunking → embeddings → pgvector
+- [x] Nó de retrieval no grafo (RAG condicional: só busca se precisar)
+- [x] Extração de memória de longo prazo (fatos relevantes por usuário, com embedding)
+- [x] Estratégia de "esquecimento"/TTL de memória
 
 ### Fase 3 — Builder visual (React)
-- [ ] Canvas com React Flow: nós = (prompt, tool, condição, RAG, guardrail)
-- [ ] Serialização do canvas → definição declarativa do agente
-- [ ] Chat sandbox para testar o agente antes de publicar
-- [ ] Preview de trace em tempo real (embed do Langfuse ou dashboard próprio)
+- [x] Canvas visual de nós do agente (prompt, tool, RAG, guardrail)
+- [x] Serialização do canvas → definição declarativa do agente
+- [x] Chat sandbox para testar o agente antes de publicar
+- [x] Preview de trace em tempo real (dashboard local de execução e passos do runtime)
 
 ### Fase 4 — Observabilidade e avaliação (o que separa hobby de produção)
 - [ ] Todo run instrumentado no Langfuse: input, output, custo, latência, tokens
@@ -180,15 +180,15 @@ agentforge/
 
 ## 8. Próximo passo imediato
 
-Concluir a **Fase 0** adicionando o stack Langfuse ao ambiente local, configurando as variáveis de ambiente de `.env.example` e capturando o primeiro trace do fluxo `LangGraph -> Ollama`. O cliente de tracing já está integrado, mas o Docker daemon precisa estar ativo para validar a ingestão. Depois, avançar para o interpretador de definições declarativas e o roteamento de modelos da Fase 1.
+A **Fase 3** já está em andamento no frontend com o builder visual, canvas de nós, sandbox de testes e definição declarativa do agente. O próximo avanço é conectar esse builder a uma camada de persistência real no backend e evoluir para a Fase 4 com observabilidade e avaliação estruturadas.
 
 ---
 
 ## 9. Fundação implementada
 
-O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI e um grafo LangGraph mínimo com adaptador para Ollama.
+O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI, um grafo LangGraph mínimo com adaptador para Ollama, suporte a RAG e memória de longo prazo.
 
-Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário, execução do grafo com modelo local e instrumentação opcional para Langfuse. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
+No frontend, agora há um builder visual em React com edição de prompt, toggles de nós, sandbox de execução e painel de trace em tempo real do runtime. Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário, execução do grafo com modelo local, instrumentação opcional para Langfuse, busca de documentos relevantes pelo contexto do usuário e expiração de fatos de memória por TTL. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
 
 Legenda do roadmap: `[x]` concluído, `[~]` parcialmente concluído, `[ ]` pendente.
 

@@ -18,6 +18,7 @@ ContinuationPolicy = Callable[[AgentDefinition, int, str], bool]
 class AgentGraphState(TypedDict, total=False):
     request: RunRequest
     memories: list[str]
+    context: list[str]
     plan: Any
     result: str
     answer: str
@@ -59,8 +60,16 @@ class GraphBuilder:
 
         def recall_memory(state: AgentGraphState) -> AgentGraphState:
             request = state["request"]
-            memories = self._memory.recall(request.thread_id, request.user_id)
+            memories = self._memory.recall(request.thread_id, request.user_id, request.message)
             return {"memories": memories, "steps": [*state["steps"], RunStep(name="memory", detail=f"Recalled {len(memories)} item(s).")]}
+
+        def retrieve_context(state: AgentGraphState) -> AgentGraphState:
+            request = state["request"]
+            if not agent.retrieval_enabled:
+                return {"context": []}
+            documents = self._memory.search_documents(request.message, limit=agent.retrieval_top_k)
+            context = [document.text for document in documents]
+            return {"context": context, "steps": [*state["steps"], RunStep(name="retrieval", detail=f"Retrieved {len(context)} document(s).")]}
 
         def plan(state: AgentGraphState) -> AgentGraphState:
             execution_plan = self._planner(agent, state["request"].message)
@@ -95,7 +104,8 @@ class GraphBuilder:
 
         def reflect(state: AgentGraphState) -> AgentGraphState:
             model = self._models.get(state["model_name"], self._default_model)
-            answer = self._reflector(agent, state["result"], state["memories"], model)
+            context = state.get("context", [])
+            answer = self._reflector(agent, state["result"], [*state["memories"], *context], model)
             loop_count = state["loop_count"] + 1
             return {
                 "answer": answer,
@@ -130,6 +140,9 @@ class GraphBuilder:
                 return "confirmation"
             return "act"
 
+        def after_memory(state: AgentGraphState) -> str:
+            return "retrieve" if agent.retrieval_enabled else "plan"
+
         def after_output_guardrail(state: AgentGraphState) -> str:
             return "persist" if state["status"] == "completed" else END
 
@@ -141,6 +154,7 @@ class GraphBuilder:
         graph = StateGraph(AgentGraphState)
         graph.add_node("input_guardrail", input_guardrail)
         graph.add_node("memory", recall_memory)
+        graph.add_node("retrieve", retrieve_context)
         graph.add_node("plan", plan)
         graph.add_node("confirmation", request_confirmation)
         graph.add_node("act", act)
@@ -150,7 +164,8 @@ class GraphBuilder:
         graph.add_node("persist", persist_memory)
         graph.add_edge(START, "input_guardrail")
         graph.add_conditional_edges("input_guardrail", after_input_guardrail)
-        graph.add_edge("memory", "plan")
+        graph.add_conditional_edges("memory", after_memory)
+        graph.add_edge("retrieve", "plan")
         graph.add_conditional_edges("plan", after_plan)
         graph.add_edge("confirmation", END)
         graph.add_edge("act", "model_router")
