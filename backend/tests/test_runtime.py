@@ -2,7 +2,7 @@ import time
 
 from app.graph.runtime import AgentRuntime
 from app.graph.hello import OllamaModel, build_hello_graph
-from app.observability.langfuse import LangfuseClient
+from app.observability.langfuse import AgentEvaluator, EvalCase, LangfuseClient
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, AgentRule, ModelRouterDefinition, RuleStage, RunRequest, ToolDefinition
 from app.tools.registry import ToolRegistry
@@ -267,3 +267,37 @@ def test_langgraph_records_generation_when_langfuse_is_configured(monkeypatch) -
     assert result["response"] == "answer"
     assert captured[0]["name"] == "hello-llm"
     assert captured[0]["input_text"] == "hello"
+
+
+def test_runtime_records_langfuse_trace_for_each_run(monkeypatch) -> None:
+    captured: list[dict[str, str]] = []
+    tracer = LangfuseClient(public_key="public", secret_key="secret")
+    monkeypatch.setattr(
+        tracer,
+        "record_generation",
+        lambda **fields: captured.append(fields) or "generation-id",
+    )
+    runtime = AgentRuntime(tools=ToolRegistry(), memory=InMemoryStore(), model=lambda prompt: f"final: {prompt}", tracer=tracer)
+
+    response = runtime.run(
+        AgentDefinition(id="trace", name="Trace", system_prompt="Be brief."),
+        RunRequest(thread_id="t-1", user_id="u-1", message="hello"),
+    )
+
+    assert response.status == "completed"
+    assert captured and captured[0]["name"] == "agent-runtime"
+    assert "hello" in captured[0]["input_text"]
+
+
+def test_agent_evaluator_scores_matches_and_reports_pass_rate() -> None:
+    cases = [
+        EvalCase(name="simple", input_text="hello", expected_output="hi"),
+        EvalCase(name="complex", input_text="goodbye", expected_output="bye"),
+    ]
+
+    evaluator = AgentEvaluator(lambda prompt: "hi" if prompt == "hello" else "bye")
+    results = evaluator.evaluate(cases)
+
+    assert [item.passed for item in results] == [True, True]
+    assert results[0].score == 1.0
+    assert evaluator.pass_rate(results) == 1.0

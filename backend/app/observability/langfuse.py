@@ -1,11 +1,61 @@
 import base64
 import json
 import os
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import uuid4
+
+
+@dataclass
+class EvalCase:
+    name: str
+    input_text: str
+    expected_output: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EvalResult:
+    name: str
+    input_text: str
+    expected_output: str
+    actual_output: str
+    score: float
+    passed: bool
+
+
+class AgentEvaluator:
+    """Simple deterministic evaluator suitable for local regression checks."""
+
+    def __init__(self, model: Callable[[str], str]) -> None:
+        self._model = model
+
+    def evaluate(self, cases: Sequence[EvalCase]) -> list[EvalResult]:
+        results: list[EvalResult] = []
+        for case in cases:
+            actual = self._model(case.input_text)
+            passed = actual.strip().casefold() == case.expected_output.strip().casefold()
+            results.append(
+                EvalResult(
+                    name=case.name,
+                    input_text=case.input_text,
+                    expected_output=case.expected_output,
+                    actual_output=actual,
+                    score=1.0 if passed else 0.0,
+                    passed=passed,
+                )
+            )
+        return results
+
+    @staticmethod
+    def pass_rate(results: Sequence[EvalResult]) -> float:
+        if not results:
+            return 0.0
+        return sum(1 for result in results if result.passed) / len(results)
 
 
 class LangfuseClient:

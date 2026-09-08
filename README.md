@@ -21,7 +21,7 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 │                        FRONTEND (React)                       │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
 │  │ Agent Builder │  │ Chat Sandbox │  │ Dashboard/Traces   │  │
-│  │ (canvas nós)  │  │  (teste)     │  │ (Langfuse embed)   │  │
+│  │ (canvas nós)  │  │  (teste)     │  │ (UI local + Langfuse) │  │
 │  └──────────────┘  └──────────────┘  └────────────────────┘  │
 └───────────────────────────┬───────────────────────────────────┘
                              │ REST / WebSocket (streaming)
@@ -62,7 +62,7 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 | Integrações LLM | **LangChain** | wrappers de provedores, retrievers, loaders |
 | API backend | **FastAPI** | CRUD, auth, streaming (SSE/WebSocket) |
 | Banco | **PostgreSQL + pgvector** | dados relacionais, checkpoints, embeddings/RAG |
-| Observabilidade/tracing | **Langfuse** (self-host, MIT) | tracing, custo, avaliação, dataset de testes |
+| Observabilidade/tracing | **Frontend local trace + Langfuse** (self-host, MIT) | UI mostra cada passo do runtime; Langfuse registra execução, custo e avaliação |
 | Frontend | **React + React Flow** | canvas de construção do agente (nós e arestas) |
 | Fila (opcional, fase 2) | **Redis / RQ** | execução assíncrona de agentes de longa duração |
 | Sandbox de execução de tools | **Docker / gVisor / Firecracker** | isolar execução de código/tools de terceiros |
@@ -115,6 +115,8 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Preview de trace em tempo real (dashboard local de execução e passos do runtime)
 
 ### Fase 4 — Observabilidade e avaliação (o que separa hobby de produção)
+- [x] Trace local do runtime visível no frontend (passos, status e memória usada)
+- [x] Instrumentação opcional do run em Langfuse: input, output, modelo e registro de geração
 - [ ] Todo run instrumentado no Langfuse: input, output, custo, latência, tokens
 - [ ] Dataset de avaliação (casos de teste com resultado esperado)
 - [ ] Avaliadores automáticos (LLM-as-judge + regras determinísticas)
@@ -181,6 +183,17 @@ agentforge/
 ## 8. Próximo passo imediato
 
 A **Fase 3** já está em andamento no frontend com o builder visual, canvas de nós, sandbox de testes e definição declarativa do agente. O próximo avanço é conectar esse builder a uma camada de persistência real no backend e evoluir para a Fase 4 com observabilidade e avaliação estruturadas.
+
+## Observabilidade: frontend vs Langfuse
+
+Existem duas camadas distintas:
+
+- **Frontend UI**: mostra o trace local do runtime em tempo real. Ele lê os passos retornados pelo backend (`status`, `steps`, `memories_used`) e monta a visualização de execução do agente.
+- **Langfuse**: é a camada de observabilidade externa, self-hosted, para registrar execuções, gerações, modelos e dados de avaliação. Ele é opcional e só entra em ação quando as chaves do Langfuse estão configuradas no ambiente.
+
+Em outras palavras, a tela do frontend não é o Langfuse; ela é uma representação local do que aconteceu no runtime. O Langfuse complementa isso com armazenamento, histórico e métricas mais robustas para análise e avaliação.
+
+Se as variáveis `LANGFUSE_PUBLIC_KEY` e `LANGFUSE_SECRET_KEY` não estiverem presentes, o runtime continua funcionando e a UI continua exibindo os passos locais; apenas o envio para Langfuse fica desabilitado.
 
 ---
 

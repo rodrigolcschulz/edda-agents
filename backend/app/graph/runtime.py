@@ -5,6 +5,7 @@ from typing import Any
 from app.graph.builder import ContinuationPolicy, GraphBuilder, Model
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse, ToolDefinition
+from app.observability.langfuse import LangfuseClient
 from app.tools.registry import ToolRegistry
 
 
@@ -24,6 +25,7 @@ class AgentRuntime:
         models: dict[str, Model] | None = None,
         continuation_policy: ContinuationPolicy | None = None,
         checkpointer: Any | None = None,
+        tracer: LangfuseClient | None = None,
     ) -> None:
         self._tools = tools
         self._memory = memory
@@ -31,6 +33,7 @@ class AgentRuntime:
         self._models = models
         self._continuation_policy = continuation_policy or self._is_resolved
         self._checkpointer = checkpointer
+        self._tracer = tracer
 
     def set_checkpointer(self, checkpointer: Any | None) -> None:
         self._checkpointer = checkpointer
@@ -50,13 +53,21 @@ class AgentRuntime:
             {"request": request, "steps": [], "loop_count": 0},
             {"configurable": {"thread_id": request.thread_id}},
         )
-        return RunResponse(
+        response = RunResponse(
             thread_id=request.thread_id,
             answer=result["answer"],
             status=result["status"],
             steps=result.get("steps", []),
             memories_used=result.get("memories", []),
         )
+        if self._tracer:
+            self._tracer.record_generation(
+                name="agent-runtime",
+                input_text=request.message,
+                output_text=response.answer,
+                model=getattr(agent, "model", "local-deterministic"),
+            )
+        return response
 
     def _plan(self, agent: AgentDefinition, message: str) -> Plan:
         message_lower = message.casefold()
