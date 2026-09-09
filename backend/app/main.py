@@ -9,6 +9,7 @@ from app.graph.hello import OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse
+from app.observability.langfuse import LangfuseClient
 from app.tools.registry import ToolRegistry
 from app.tools.sandbox import SandboxedTool
 
@@ -50,6 +51,7 @@ runtime = AgentRuntime(
         "local-deterministic": deterministic_model,
         "qwen3:14b": OllamaModel("qwen3:14b"),
     },
+    tracer=LangfuseClient(),
 )
 
 

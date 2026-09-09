@@ -39,7 +39,7 @@ services:
     environment:
       DATABASE_URL: postgresql://edda_agents:edda_agents@postgres:5432/edda_agents
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://localhost:3001}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-web:3000}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
     extra_hosts:

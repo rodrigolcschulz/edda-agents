@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 import json
 import os
 from urllib.error import HTTPError, URLError
@@ -18,6 +19,12 @@ class HelloState(TypedDict, total=False):
 Model = Callable[[str], str]
 
 
+@dataclass(frozen=True)
+class ModelResponse:
+    content: str
+    usage: dict[str, int]
+
+
 class OllamaModel:
     def __init__(self, model: str = "qwen3:14b", base_url: str | None = None, timeout: float = 120.0) -> None:
         self.model = model
@@ -25,6 +32,9 @@ class OllamaModel:
         self.timeout = timeout
 
     def __call__(self, message: str) -> str:
+        return self.generate(message).content
+
+    def generate(self, message: str) -> ModelResponse:
         payload = json.dumps(
             {
                 "model": self.model,
@@ -45,9 +55,16 @@ class OllamaModel:
             raise RuntimeError(f"Ollama request failed for model '{self.model}'.") from error
 
         try:
-            return result["message"]["content"]
+            content = result["message"]["content"]
         except (KeyError, TypeError) as error:
             raise RuntimeError("Ollama returned an invalid chat response.") from error
+        return ModelResponse(
+            content=content,
+            usage={
+                "input": int(result.get("prompt_eval_count", 0)),
+                "output": int(result.get("eval_count", 0)),
+            },
+        )
 
 
 def deterministic_model(message: str) -> str:

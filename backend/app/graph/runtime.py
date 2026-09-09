@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from collections.abc import Callable
+from time import perf_counter
 from typing import Any
 
 from app.graph.builder import ContinuationPolicy, GraphBuilder, Model
+from app.graph.hello import ModelResponse
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse, ToolDefinition
 from app.observability.langfuse import LangfuseClient
@@ -49,10 +51,12 @@ class AgentRuntime:
             models=self._models,
             checkpointer=self._checkpointer,
         ).build(agent)
+        started_at = perf_counter()
         result = graph.invoke(
             {"request": request, "steps": [], "loop_count": 0},
             {"configurable": {"thread_id": request.thread_id}},
         )
+        duration_ms = (perf_counter() - started_at) * 1000
         response = RunResponse(
             thread_id=request.thread_id,
             answer=result["answer"],
@@ -61,12 +65,17 @@ class AgentRuntime:
             memories_used=result.get("memories", []),
         )
         if self._tracer:
-            self._tracer.record_generation(
-                name="agent-runtime",
-                input_text=request.message,
-                output_text=response.answer,
-                model=getattr(agent, "model", "local-deterministic"),
-            )
+            try:
+                self._tracer.record_generation(
+                    name="agent-runtime",
+                    input_text=request.message,
+                    output_text=response.answer,
+                    model=agent.model,
+                    duration_ms=duration_ms,
+                    usage=result.get("model_usage", {}),
+                )
+            except RuntimeError:
+                pass
         return response
 
     def _plan(self, agent: AgentDefinition, message: str) -> Plan:
@@ -77,10 +86,13 @@ class AgentRuntime:
         return Plan(tool_name=None, reason="Answer without a tool.")
 
     @staticmethod
-    def _reflect(agent: AgentDefinition, result: str, memories: list[str], model: Model | None) -> str:
+    def _reflect(agent: AgentDefinition, result: str, memories: list[str], model: Model | None) -> str | ModelResponse:
         context = f" Previous context: {' | '.join(memories)}." if memories else ""
         if model:
             prompt = f"System: {agent.system_prompt}\nUser request: {result}{context}"
+            generate = getattr(model, "generate", None)
+            if generate:
+                return generate(prompt)
             return model(prompt)
         return f"{agent.name}: {result}{context}"
 

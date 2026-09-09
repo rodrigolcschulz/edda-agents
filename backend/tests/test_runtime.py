@@ -1,3 +1,4 @@
+import json
 import time
 
 from app.graph.runtime import AgentRuntime
@@ -253,6 +254,56 @@ def test_ollama_model_parses_chat_response(monkeypatch) -> None:
     assert OllamaModel(model="qwen3:14b")("hello") == "local answer"
 
 
+def test_ollama_model_exposes_token_usage(monkeypatch) -> None:
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"message":{"content":"local answer"},"prompt_eval_count":11,"eval_count":7}'
+
+    monkeypatch.setattr("app.graph.hello.urlopen", lambda *args, **kwargs: FakeResponse())
+
+    response = OllamaModel(model="qwen3:14b").generate("hello")
+
+    assert response.content == "local answer"
+    assert response.usage == {"input": 11, "output": 7}
+
+
+def test_langfuse_generation_includes_usage_and_duration(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, **kwargs):
+        captured["payload"] = json.loads(request.data)
+        return FakeResponse()
+
+    monkeypatch.setattr("app.observability.langfuse.urlopen", fake_urlopen)
+    tracer = LangfuseClient(host="http://langfuse", public_key="public", secret_key="secret")
+
+    assert tracer.record_generation(
+        name="agent-runtime",
+        input_text="question",
+        output_text="answer",
+        model="qwen3:14b",
+        duration_ms=25,
+        usage={"input": 11, "output": 7},
+    )
+    body = captured["payload"]["batch"][0]["body"]
+    assert body["usage"] == {"input": 11, "output": 7, "total": 18}
+    assert body["costDetails"] == {"total": 0}
+    assert body["startTime"] != body["endTime"]
+
+
 def test_langgraph_records_generation_when_langfuse_is_configured(monkeypatch) -> None:
     captured: list[dict[str, str]] = []
     tracer = LangfuseClient(public_key="public", secret_key="secret")
@@ -287,6 +338,7 @@ def test_runtime_records_langfuse_trace_for_each_run(monkeypatch) -> None:
     assert response.status == "completed"
     assert captured and captured[0]["name"] == "agent-runtime"
     assert "hello" in captured[0]["input_text"]
+    assert captured[0]["duration_ms"] >= 0
 
 
 def test_agent_evaluator_scores_matches_and_reports_pass_rate() -> None:

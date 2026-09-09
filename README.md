@@ -117,7 +117,7 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 ### Fase 4 — Observabilidade e avaliação (o que separa hobby de produção)
 - [x] Trace local do runtime visível no frontend (passos, status e memória usada)
 - [x] Instrumentação opcional do run em Langfuse: input, output, modelo e registro de geração
-- [ ] Todo run instrumentado no Langfuse: input, output, custo, latência, tokens
+- [x] Todo run instrumentado no Langfuse: input, output, custo local zero, latência e tokens
 - [ ] Dataset de avaliação (casos de teste com resultado esperado)
 - [ ] Avaliadores automáticos (LLM-as-judge + regras determinísticas)
 - [ ] Alertas de regressão (agente ficou pior após mudança de prompt)

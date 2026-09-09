@@ -25,6 +25,7 @@ class AgentGraphState(TypedDict, total=False):
     status: str
     steps: list[RunStep]
     model_name: str
+    model_usage: dict[str, int]
     loop_count: int
     should_continue: bool
 
@@ -105,10 +106,13 @@ class GraphBuilder:
         def reflect(state: AgentGraphState) -> AgentGraphState:
             model = self._models.get(state["model_name"], self._default_model)
             context = state.get("context", [])
-            answer = self._reflector(agent, state["result"], [*state["memories"], *context], model)
+            reflection = self._reflector(agent, state["result"], [*state["memories"], *context], model)
+            answer = getattr(reflection, "content", reflection)
+            model_usage = getattr(reflection, "usage", {})
             loop_count = state["loop_count"] + 1
             return {
                 "answer": answer,
+                "model_usage": model_usage,
                 "status": "completed",
                 "loop_count": loop_count,
                 "should_continue": self._continuation_policy(agent, loop_count, answer),

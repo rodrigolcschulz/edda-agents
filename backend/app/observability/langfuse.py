@@ -89,11 +89,14 @@ class LangfuseClient:
         output_text: str,
         model: str,
         trace_id: str | None = None,
+        duration_ms: float | None = None,
+        usage: dict[str, int] | None = None,
     ) -> str | None:
         if not self.enabled:
             return None
 
-        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        end_time = datetime.now(UTC)
+        start_time = end_time if duration_ms is None else end_time.fromtimestamp(end_time.timestamp() - duration_ms / 1000, UTC)
         generation_id = str(uuid4())
         body: dict[str, Any] = {
             "id": generation_id,
@@ -102,9 +105,12 @@ class LangfuseClient:
             "input": input_text,
             "output": output_text,
             "model": model,
-            "startTime": now,
-            "endTime": now,
+            "startTime": start_time.isoformat().replace("+00:00", "Z"),
+            "endTime": end_time.isoformat().replace("+00:00", "Z"),
+            "costDetails": {"total": 0},
         }
+        if usage:
+            body["usage"] = {**usage, "total": sum(usage.values())}
         payload = json.dumps({"batch": [{"type": "generation-create", "body": body}]}).encode("utf-8")
         credentials = base64.b64encode(f"{self.public_key}:{self.secret_key}".encode("utf-8")).decode("ascii")
         request = Request(
