@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.graph.checkpoint import PostgresCheckpointer
-from app.graph.hello import OllamaModel
+from app.graph.hello import OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse
@@ -42,7 +42,15 @@ tools.register_sandboxed(
     "echo",
     SandboxedTool(image="edda-agents-tool-runner", command=("python", "/runner/runner.py", "echo")),
 )
-runtime = AgentRuntime(tools=tools, memory=InMemoryStore(), model=OllamaModel())
+runtime = AgentRuntime(
+    tools=tools,
+    memory=InMemoryStore(),
+    model=OllamaModel(),
+    models={
+        "local-deterministic": deterministic_model,
+        "qwen3:14b": OllamaModel("qwen3:14b"),
+    },
+)
 
 
 def health() -> dict[str, str]:
