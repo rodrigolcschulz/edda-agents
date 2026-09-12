@@ -219,8 +219,14 @@ Para habilitar o tracing, copie `.env.example` para `.env` e preencha as chaves 
 
 Para aplicar o schema inicial no Postgres da Edda Agents:
 
-```bash
-docker compose -f infra/docker-compose.yml exec -T postgres psql -U agentforge -d agentforge -f - < infra/migrations/001_initial.sql
+```powershell
+Get-Content infra/migrations/001_initial.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
+```
+
+Para aplicar a migration de historico e observabilidade:
+
+```powershell
+Get-Content infra/migrations/002_observability.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
 ```
 
 Para iniciar a sandbox React em desenvolvimento:

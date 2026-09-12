@@ -9,22 +9,26 @@ from app.graph.checkpoint import PostgresCheckpointer
 from app.graph.hello import OpenAIModel, OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
 from app.memory.store import InMemoryStore
-from app.models.agent import AgentDefinition, DraftResponse, RunRequest, RunResponse
 from app.models.agent import AgentDefinition, DraftResponse, DraftSummary, RunRequest, RunResponse
 from app.observability.langfuse import LangfuseClient
+from app.observability.runs import RunStore
 from app.tools.registry import ToolRegistry
 from app.tools.sandbox import SandboxedTool
 
 checkpointer: PostgresCheckpointer | None = None
 draft_store: AgentDraftStore | None = None
+run_store: RunStore | None = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global checkpointer, draft_store
+    global checkpointer, draft_store, run_store
     database_url = os.getenv("DATABASE_URL")
     draft_store = AgentDraftStore(database_url)
     draft_store.setup()
+    run_store = RunStore(database_url)
+    run_store.setup()
+    runtime.set_run_store(run_store)
     if database_url:
         checkpointer = PostgresCheckpointer(database_url)
         checkpointer.setup()
@@ -37,6 +41,10 @@ async def lifespan(_: FastAPI):
     if draft_store:
         draft_store.close()
         draft_store = None
+    if run_store:
+        run_store.close()
+        run_store = None
+        runtime.set_run_store(None)
 
 
 app = FastAPI(title="AgentForge API", version="0.1.0", lifespan=lifespan)

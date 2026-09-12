@@ -9,6 +9,7 @@ from app.graph.hello import ModelResponse
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse, ToolDefinition
 from app.observability.langfuse import LangfuseClient
+from app.observability.runs import RunStore
 from app.tools.registry import ToolRegistry
 
 
@@ -29,6 +30,7 @@ class AgentRuntime:
         continuation_policy: ContinuationPolicy | None = None,
         checkpointer: Any | None = None,
         tracer: LangfuseClient | None = None,
+        run_store: RunStore | None = None,
     ) -> None:
         self._tools = tools
         self._memory = memory
@@ -37,13 +39,19 @@ class AgentRuntime:
         self._continuation_policy = continuation_policy or self._is_resolved
         self._checkpointer = checkpointer
         self._tracer = tracer
+        self._run_store = run_store
 
     def set_checkpointer(self, checkpointer: Any | None) -> None:
         self._checkpointer = checkpointer
 
+    def set_run_store(self, run_store: RunStore | None) -> None:
+        self._run_store = run_store
+
     def run(self, agent: AgentDefinition, request: RunRequest) -> RunResponse:
         run_id = str(uuid4())
         trace_id = str(uuid4())
+        if self._run_store:
+            self._run_store.start(agent, request, run_id, trace_id)
         graph = GraphBuilder(
             tools=self._tools,
             memory=self._memory,
@@ -55,14 +63,20 @@ class AgentRuntime:
             checkpointer=self._checkpointer,
         ).build(agent)
         started_at = perf_counter()
-        result = graph.invoke(
-            {"request": request, "steps": [], "loop_count": 0},
-            {"configurable": {"thread_id": request.thread_id}},
-        )
+        try:
+            result = graph.invoke(
+                {"request": request, "steps": [], "loop_count": 0},
+                {"configurable": {"thread_id": request.thread_id}},
+            )
+        except Exception as error:
+            if self._run_store:
+                self._run_store.fail(run_id, error, (perf_counter() - started_at) * 1000)
+            raise
         duration_ms = (perf_counter() - started_at) * 1000
         usage = result.get("model_usage", {})
         input_tokens = usage.get("input", 0)
         output_tokens = usage.get("output", 0)
+        model_name = result.get("model_name", agent.model)
         response = RunResponse(
             thread_id=request.thread_id,
             run_id=run_id,
@@ -70,18 +84,26 @@ class AgentRuntime:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
+            model_name=model_name,
             answer=result["answer"],
             status=result["status"],
             steps=result.get("steps", []),
             memories_used=result.get("memories", []),
         )
+        if self._run_store:
+            self._run_store.finish(
+                response,
+                agent,
+                duration_ms,
+                [step.model_dump(mode="json") for step in response.steps],
+            )
         if self._tracer:
             try:
                 self._tracer.record_generation(
                     name="agent-runtime",
                     input_text=request.message,
                     output_text=response.answer,
-                    model=result.get("model_name", agent.model),
+                    model=model_name,
                     trace_id=trace_id,
                     duration_ms=duration_ms,
                     usage=usage,

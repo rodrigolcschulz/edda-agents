@@ -386,11 +386,11 @@ Observabilidade pode conter dados sensiveis. As regras minimas sao:
 
 ### Fase O3 - Historico persistido
 
-- [ ] Criar migration para `runs`, `run_generations` e `run_steps`.
-- [ ] Persistir inicio, sucesso, falha e cancelamento.
+- [~] Criar migration para `runs`, `run_generations` e `run_steps`. A migration incremental e o setup compativel ja existem.
+- [x] Persistir inicio, sucesso e falha. Cancelamento ainda falta.
 - [ ] Implementar idempotencia para nao duplicar finalizacao de run.
-- [ ] Criar politica de retencao e indices por agente, status e data.
-- [ ] Manter `trace_id` como referencia externa.
+- [x] Criar indices por agente, status e data.
+- [x] Manter `trace_id` como referencia externa.
 
 ### Fase O4 - API e agregacoes
 

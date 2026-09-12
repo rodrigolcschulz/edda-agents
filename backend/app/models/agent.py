@@ -78,6 +78,7 @@ class RunResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    model_name: str | None = None
     answer: str
     status: str
     steps: list[RunStep]

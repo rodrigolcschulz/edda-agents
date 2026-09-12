@@ -32,6 +32,7 @@ def test_runs_plan_act_reflect_cycle() -> None:
     assert response.status == "completed"
     assert response.run_id
     assert response.trace_id
+    assert response.model_name == "local-deterministic"
     assert response.answer == "Support: result for Use echo for this request"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect"]
 
