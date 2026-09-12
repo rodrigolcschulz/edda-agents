@@ -9,6 +9,7 @@ from app.graph.hello import ModelResponse
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse, ToolDefinition
 from app.observability.langfuse import LangfuseClient
+from app.observability.pricing import estimate_cost, pricing_for, pricing_version
 from app.observability.runs import RunStore
 from app.tools.registry import ToolRegistry
 
@@ -77,6 +78,8 @@ class AgentRuntime:
         input_tokens = usage.get("input", 0)
         output_tokens = usage.get("output", 0)
         model_name = result.get("model_name", agent.model)
+        pricing = pricing_for(model_name)
+        estimated_cost = estimate_cost(model_name, input_tokens, output_tokens)
         response = RunResponse(
             thread_id=request.thread_id,
             run_id=run_id,
@@ -85,6 +88,8 @@ class AgentRuntime:
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
             model_name=model_name,
+            estimated_cost=float(estimated_cost) if estimated_cost is not None else None,
+            cost_currency=pricing.currency if pricing else None,
             answer=result["answer"],
             status=result["status"],
             steps=result.get("steps", []),
@@ -112,7 +117,9 @@ class AgentRuntime:
                         "agent_id": agent.id,
                         "agent_name": agent.name,
                         "thread_id": request.thread_id,
+                        "pricing_version": pricing_version(),
                     },
+                    cost=float(estimated_cost) if estimated_cost is not None else None,
                 )
             except RuntimeError:
                 pass

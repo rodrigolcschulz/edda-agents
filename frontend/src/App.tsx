@@ -8,6 +8,7 @@ import {
   CircleAlert,
   Clock3,
   Database,
+  GitBranch,
   Layers3,
   LoaderCircle,
   MessageSquareText,
@@ -24,6 +25,14 @@ import agentIcon from "../assets/Gemini_Generated_Image_3tesah3tesah3tes.jpg";
 
 type RunStep = { name: string; detail: string };
 type RunResponse = {
+  run_id: string;
+  trace_id: string;
+  model_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number | null;
+  cost_currency: string | null;
   answer: string;
   status: string;
   steps: RunStep[];
@@ -39,7 +48,7 @@ type BuilderNode = {
   enabled: boolean;
 };
 
-type WorkspaceSection = "builder" | "definition" | "memory" | "agents";
+type WorkspaceSection = "builder" | "definition" | "memory" | "trace" | "agents";
 type AgentSummary = { id: string; name: string; version: number };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -229,6 +238,7 @@ export default function App() {
             <button className={`nav-item ${activeSection === "builder" ? "active" : ""}`} onClick={() => setActiveSection("builder")}><Activity size={16} /> Builder canvas</button>
             <button className={`nav-item ${activeSection === "definition" ? "active" : ""}`} onClick={() => setActiveSection("definition")}><Layers3 size={16} /> Definition</button>
             <button className={`nav-item ${activeSection === "memory" ? "active" : ""}`} onClick={() => setActiveSection("memory")}><Database size={16} /> Memory</button>
+            <button className={`nav-item ${activeSection === "trace" ? "active" : ""}`} onClick={() => setActiveSection("trace")}><GitBranch size={16} /> Trace</button>
             <button className={`nav-item ${activeSection === "agents" ? "active" : ""}`} onClick={() => setActiveSection("agents")}><Bot size={16} /> Agents</button>
           </nav>
 
@@ -356,6 +366,44 @@ export default function App() {
                 </div>
               ) : (
                 <div className="inspector-empty">Run the sandbox to populate thread memory.</div>
+              )}
+            </div>
+          )}
+
+          {activeSection === "trace" && (
+            <div className="definition-panel definition-panel--section trace-panel">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">Trace</div>
+                  <h2>Latest execution</h2>
+                </div>
+                <GitBranch size={18} />
+              </div>
+              {response ? (
+                <>
+                  <div className="trace-summary-grid">
+                    <div><span>Status</span><strong>{response.status}</strong></div>
+                    <div><span>Model</span><strong>{response.model_name ?? model}</strong></div>
+                    <div><span>Total tokens</span><strong>{response.total_tokens}</strong></div>
+                    <div><span>Input / output</span><strong>{response.input_tokens} / {response.output_tokens}</strong></div>
+                    <div><span>Estimated cost</span><strong>{response.estimated_cost === null ? "Not configured" : `${response.cost_currency ?? "USD"} ${response.estimated_cost.toFixed(6)}`}</strong></div>
+                  </div>
+                  <div className="trace-identifiers">
+                    <div><span>Run ID</span><code>{response.run_id}</code></div>
+                    <div><span>Trace ID</span><code>{response.trace_id}</code></div>
+                  </div>
+                  <div className="trace-list trace-list--panel">
+                    {response.steps.map((step, index) => (
+                      <div className="trace-step" key={`${step.name}-${index}`}>
+                        <span className="trace-index">0{index + 1}</span>
+                        <div><strong>{step.name}</strong><p>{step.detail}</p></div>
+                        <Check size={14} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="inspector-empty">Run the sandbox to generate a trace.</div>
               )}
             </div>
           )}

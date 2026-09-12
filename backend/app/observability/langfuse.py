@@ -138,6 +138,7 @@ class LangfuseClient:
         duration_ms: float | None = None,
         usage: dict[str, int] | None = None,
         metadata: dict[str, Any] | None = None,
+        cost: float | None = None,
     ) -> str | None:
         if not self.enabled:
             return None
@@ -154,7 +155,7 @@ class LangfuseClient:
             "model": model,
             "startTime": start_time.isoformat().replace("+00:00", "Z"),
             "endTime": end_time.isoformat().replace("+00:00", "Z"),
-            "costDetails": {"total": 0},
+            "costDetails": {"total": cost} if cost is not None else {},
         }
         if usage:
             body["usage"] = {**usage, "total": sum(usage.values())}

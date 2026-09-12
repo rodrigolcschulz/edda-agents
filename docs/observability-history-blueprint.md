@@ -398,7 +398,7 @@ Observabilidade pode conter dados sensiveis. As regras minimas sao:
 - [ ] Criar endpoint de detalhe.
 - [ ] Criar agregacoes por agente, modelo e periodo.
 - [ ] Adicionar filtros por tenant e autorizacao.
-- [ ] Criar calculo de custo por tabela de precos.
+- [~] Criar calculo de custo por tabela de precos. A estimativa por execucao ja existe para Ollama/local e modelos OpenAI cadastrados; agregacoes e atualizacao operacional da tabela ainda faltam.
 
 ### Fase O5 - Frontend
 

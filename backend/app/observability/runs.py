@@ -128,6 +128,7 @@ class RunStore:
                     input_tokens = %s,
                     output_tokens = %s,
                     total_tokens = %s,
+                    estimated_cost = %s,
                     duration_ms = %s,
                     finished_at = %s
                 WHERE id = %s
@@ -138,6 +139,7 @@ class RunStore:
                     response.input_tokens,
                     response.output_tokens,
                     response.total_tokens,
+                    response.estimated_cost,
                     round(duration_ms),
                     finished_at,
                     response.run_id,
@@ -146,9 +148,9 @@ class RunStore:
             cursor.execute(
                 """
                 INSERT INTO run_generations (
-                    run_id, agent_id, model_name, input_tokens, output_tokens, total_tokens, latency_ms, provider
+                    run_id, agent_id, model_name, input_tokens, output_tokens, total_tokens, estimated_cost, latency_ms, provider
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     response.run_id,
@@ -157,6 +159,7 @@ class RunStore:
                     response.input_tokens,
                     response.output_tokens,
                     response.total_tokens,
+                    response.estimated_cost,
                     round(duration_ms),
                     (response.model_name or agent.model).split(":", 1)[0],
                 ),

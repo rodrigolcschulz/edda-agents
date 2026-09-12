@@ -33,6 +33,8 @@ def test_runs_plan_act_reflect_cycle() -> None:
     assert response.run_id
     assert response.trace_id
     assert response.model_name == "local-deterministic"
+    assert response.estimated_cost == 0
+    assert response.cost_currency == "USD"
     assert response.answer == "Support: result for Use echo for this request"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect"]
 
@@ -134,6 +136,23 @@ def test_runtime_accumulates_model_usage_across_reflection_cycles() -> None:
     assert response.input_tokens == 20
     assert response.output_tokens == 8
     assert response.total_tokens == 28
+
+
+def test_runtime_estimates_openai_cost_from_token_usage() -> None:
+    from app.graph.hello import ModelResponse
+
+    runtime = AgentRuntime(
+        tools=ToolRegistry(),
+        memory=InMemoryStore(),
+        models={"gpt-4o-mini": lambda _prompt: ModelResponse(content="answer", usage={"input": 1_000_000, "output": 2_000_000})},
+    )
+    response = runtime.run(
+        AgentDefinition(id="priced", name="Priced", system_prompt="Help.", model="gpt-4o-mini"),
+        RunRequest(thread_id="priced", user_id="user-1", message="hello"),
+    )
+
+    assert response.estimated_cost == 1.35
+    assert response.cost_currency == "USD"
 
 
 def test_docker_tool_sandbox_disables_network_and_limits_resources(monkeypatch) -> None:
@@ -363,7 +382,7 @@ def test_langfuse_generation_includes_usage_and_duration(monkeypatch) -> None:
     )
     body = captured["payload"]["batch"][0]["body"]
     assert body["usage"] == {"input": 11, "output": 7, "total": 18}
-    assert body["costDetails"] == {"total": 0}
+    assert body["costDetails"] == {}
     assert body["startTime"] != body["endTime"]
 
 
