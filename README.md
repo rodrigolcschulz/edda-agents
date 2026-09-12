@@ -81,6 +81,8 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 - `threads` — conversas (mapeiam para `thread_id` do checkpointer do LangGraph).
 - `long_term_memory` — fatos extraídos por usuário/agente, com embedding para busca semântica.
 - `runs` — cada execução do agente (status, custo, duração, trace_id do Langfuse).
+- `runs` com `kind = workflow` — histórico agregado de uma execução de workflow, incluindo versão, status, tokens, custo e trace pai.
+- `workflow_node_runs` — execução de cada nó do workflow, vinculada ao run do agente, artefatos e trace da etapa.
 
 Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 
@@ -122,14 +124,24 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Avaliador determinístico com regras `exact`, `contains` e `not_contains`
 - [x] Comparação contra baseline com detecção de queda na taxa de aprovação
 
-### Fase 5 — Multi-tenancy, segurança e produção
+### Fase 5 — Workflows multiagente
+- [x] Contratos de workflow, nós, arestas e artefatos.
+- [x] Executor linear em memória reutilizando agentes salvos.
+- [x] API síncrona `POST /v1/workflows/run`.
+- [x] Histórico pai/filho com tokens, custos, duração e traces persistidos.
+- [~] Persistência de artefatos e definições versionadas de workflow.
+- [~] Canvas visual de workflows lineares com seleção, adição, remoção e reordenação de agentes.
+- [ ] Branching, transforms, conditions e approvals no canvas.
+- [ ] Execução assíncrona, retries e retomada por checkpoint.
+
+### Fase 6 — Multi-tenancy, segurança e produção
 - [ ] Auth (JWT) + isolamento por tenant (RLS no Postgres)
 - [ ] Rate limiting por agente/tenant
 - [ ] Guardrails: validação de input/output (PII, prompt injection, conteúdo proibido)
 - [ ] Sandbox real de execução de tools (container efêmero, sem acesso à rede por padrão)
 - [ ] Deploy (Docker Compose → depois Kubernetes, se quiser ir além)
 
-### Fase 6 — Polimento de portfólio
+### Fase 7 — Polimento de portfólio
 - [ ] README com GIF/vídeo demo
 - [ ] Agente de exemplo pronto (ex: assistente de suporte com RAG sobre uma FAQ)
 - [ ] Documentação de arquitetura (diagramas, decisões técnicas — ADRs)
@@ -199,7 +211,7 @@ Se as variáveis `LANGFUSE_PUBLIC_KEY` e `LANGFUSE_SECRET_KEY` não estiverem pr
 
 ## 9. Fundação implementada
 
-O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI, um grafo LangGraph mínimo com adaptador para Ollama, suporte a RAG e memória de longo prazo.
+O esqueleto executável em `backend/` inclui schema declarativo Pydantic, runtime com o fluxo `memory -> plan -> act -> reflect`, workflows multiagente lineares com artefatos e histórico pai/filho, regras de entrada e saída, registro controlado de tools, gateway MCP com allowlist, uma API FastAPI, um grafo LangGraph mínimo com adaptador para Ollama, suporte a RAG e memória de longo prazo.
 
 No frontend, agora há um builder visual em React com edição de prompt, toggles de nós, sandbox de execução e painel de trace em tempo real do runtime. Também foram incluídos testes do fluxo, bloqueio por regra, confirmação de tools sensíveis, isolamento de memória por usuário, execução do grafo com modelo local, instrumentação opcional para Langfuse, busca de documentos relevantes pelo contexto do usuário e expiração de fatos de memória por TTL. O PostgreSQL com pgvector está configurado em `infra/docker-compose.yml`.
 
@@ -229,6 +241,12 @@ Para aplicar a migration de historico e observabilidade:
 Get-Content infra/migrations/002_observability.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
 ```
 
+Para aplicar a migration de workflows:
+
+```powershell
+Get-Content infra/migrations/003_workflows.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
+```
+
 Para iniciar a sandbox React em desenvolvimento:
 
 ```bash
@@ -247,7 +265,7 @@ docker compose -f infra/docker-compose.yml up --build -d
 
 O projeto Docker usa o nome `agent-forge`, então os containers aparecem como `agent-forge-backend-1`, `agent-forge-frontend-1` e assim por diante. URLs locais: frontend em `http://localhost:5173`, API em `http://localhost:8000` e Langfuse em `http://localhost:3001`.
 
-API: `GET /health` e `POST /v1/agents/run`.
+API: `GET /health`, `POST /v1/agents/run` e `POST /v1/workflows/run`.
 
 ```bash
 pytest

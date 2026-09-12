@@ -8,8 +8,10 @@ from app.agents.store import AgentDraftStore
 from app.graph.checkpoint import PostgresCheckpointer
 from app.graph.hello import OpenAIModel, OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
+from app.graph.workflow import WorkflowRuntime
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, DraftResponse, DraftSummary, RunRequest, RunResponse
+from app.models.workflow import WorkflowExecutionRequest, WorkflowRunResponse
 from app.observability.langfuse import LangfuseClient
 from app.observability.runs import RunStore
 from app.tools.registry import ToolRegistry
@@ -84,6 +86,25 @@ def run_agent(agent: AgentDefinition, request: RunRequest) -> RunResponse:
 
 
 app.post("/v1/agents/run", response_model=RunResponse)(run_agent)
+
+
+def run_workflow(request: WorkflowExecutionRequest) -> WorkflowRunResponse:
+    if draft_store is None:
+        raise RuntimeError("Draft store is not initialized.")
+
+    def resolve_agent(agent_id: str) -> AgentDefinition:
+        saved = draft_store.get(agent_id)
+        if saved is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail=f"Agent draft '{agent_id}' not found.")
+        return saved[1]
+
+    workflow_runtime = WorkflowRuntime(runtime, resolve_agent, run_store)
+    return workflow_runtime.run(request.workflow, request.input, request.user_id)
+
+
+app.post("/v1/workflows/run", response_model=WorkflowRunResponse)(run_workflow)
 
 
 def save_draft(agent: AgentDefinition) -> DraftResponse:

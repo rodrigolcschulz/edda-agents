@@ -17,6 +17,9 @@ import {
   Sparkles,
   Wand2,
   Plus,
+  Workflow,
+  Play,
+  FileOutput,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -38,6 +41,38 @@ type RunResponse = {
   steps: RunStep[];
   memories_used: string[];
 };
+type WorkflowArtifact = { id: string; type: string; content: string; source_node_id: string | null };
+type WorkflowNodeRun = {
+  node_id: string;
+  agent_run_id: string;
+  status: string;
+  model_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number | null;
+  duration_ms: number;
+  trace_id: string;
+};
+type WorkflowRunResponse = {
+  run: {
+    id: string;
+    workflow_id: string;
+    workflow_version: number;
+    status: string;
+    trace_id: string;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    estimated_cost: number | null;
+    cost_currency: string | null;
+    models_used: string[];
+    duration_ms: number;
+    artifacts: WorkflowArtifact[];
+    node_runs: WorkflowNodeRun[];
+  };
+  output: WorkflowArtifact;
+};
 type DraftResponse = { agent: typeof defaultAgent; version: number };
 
 type BuilderNode = {
@@ -48,8 +83,9 @@ type BuilderNode = {
   enabled: boolean;
 };
 
-type WorkspaceSection = "builder" | "definition" | "memory" | "trace" | "agents";
+type WorkspaceSection = "builder" | "workflow" | "definition" | "memory" | "trace" | "agents";
 type AgentSummary = { id: string; name: string; version: number };
+type WorkflowDraftNode = { id: string; agent_id: string };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -74,6 +110,29 @@ const defaultAgent = {
   ],
 };
 
+const workflowDemoAgents = [
+  {
+    id: "project-manager",
+    name: "Gerente de Projetos",
+    system_prompt: "Transforme o problema recebido em um backlog estruturado de User Stories, com critérios de aceitação, prioridades, dependências, riscos, dúvidas e premissas. Não invente requisitos.",
+    model: "qwen3:14b",
+    retrieval_enabled: false,
+    retrieval_top_k: 3,
+    tools: [],
+    rules: [],
+  },
+  {
+    id: "data-architect",
+    name: "Arquiteto de Dados e Software",
+    system_prompt: "Receba o problema e o plano do gerente. Produza uma especificação técnica de arquitetura com contexto, escopo, requisitos, dados, integrações, fluxo, alternativas, riscos e decisões. Registre perguntas quando faltarem informações.",
+    model: "qwen3:14b",
+    retrieval_enabled: false,
+    retrieval_top_k: 3,
+    tools: [],
+    rules: [],
+  },
+];
+
 export default function App() {
   const [agentName, setAgentName] = useState(defaultAgent.name);
   const [systemPrompt, setSystemPrompt] = useState(defaultAgent.system_prompt);
@@ -90,6 +149,15 @@ export default function App() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [selectedAgentId, setSelectedAgentId] = useState(defaultAgent.id);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [workflowInput, setWorkflowInput] = useState("A empresa precisa criar um pipeline diário de dados de vendas a partir de arquivos CSV. O processo deve validar, deduplicar, enriquecer e disponibilizar os dados aprovados para relatórios.");
+  const [workflowName, setWorkflowName] = useState("Planejamento do ETL de vendas");
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowDraftNode[]>([
+    { id: "node-1", agent_id: "project-manager" },
+    { id: "node-2", agent_id: "data-architect" },
+  ]);
+  const [workflowResponse, setWorkflowResponse] = useState<WorkflowRunResponse | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [workflowError, setWorkflowError] = useState("");
 
   const generatedAgent = useMemo(
     () => ({
@@ -205,6 +273,84 @@ export default function App() {
     }
   }
 
+  async function ensureWorkflowAgents() {
+    const savedIds = new Set(agents.map((agent) => agent.id));
+    for (const demoAgent of workflowDemoAgents) {
+      if (savedIds.has(demoAgent.id)) continue;
+      const result = await fetch(`${API_URL}/v1/agents/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(demoAgent),
+      });
+      if (!result.ok) throw new Error(`Não foi possível preparar o agente ${demoAgent.name}.`);
+    }
+    setAgents((current) => [
+      ...workflowDemoAgents.map((agent) => ({ id: agent.id, name: agent.name, version: 1 })),
+      ...current.filter((agent) => !workflowDemoAgents.some((demoAgent) => demoAgent.id === agent.id)),
+    ]);
+  }
+
+  function addWorkflowNode() {
+    const fallbackAgent = agents[0]?.id ?? workflowDemoAgents[0].id;
+    setWorkflowNodes((current) => [...current, { id: `node-${Date.now()}`, agent_id: fallbackAgent }]);
+  }
+
+  function updateWorkflowNode(nodeId: string, agentId: string) {
+    setWorkflowNodes((current) => current.map((node) => node.id === nodeId ? { ...node, agent_id: agentId } : node));
+  }
+
+  function removeWorkflowNode(nodeId: string) {
+    setWorkflowNodes((current) => current.length > 1 ? current.filter((node) => node.id !== nodeId) : current);
+  }
+
+  function moveWorkflowNode(nodeIndex: number, direction: -1 | 1) {
+    setWorkflowNodes((current) => {
+      const targetIndex = nodeIndex + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      [next[nodeIndex], next[targetIndex]] = [next[targetIndex], next[nodeIndex]];
+      return next;
+    });
+  }
+
+  async function runWorkflow(event: React.FormEvent) {
+    event.preventDefault();
+    if (!workflowInput.trim() || workflowLoading) return;
+    setWorkflowLoading(true);
+    setWorkflowError("");
+    try {
+      await ensureWorkflowAgents();
+      const result = await fetch(`${API_URL}/v1/workflows/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow: {
+            id: "sales-etl-planning",
+            name: workflowName,
+            version: 1,
+            nodes: workflowNodes.map((node, index) => ({
+              id: node.id,
+              kind: "agent",
+              agent_id: node.agent_id,
+              ...(index === 0 ? {} : { input_mapping: { previous_artifact: workflowNodes[index - 1].id, source_problem: "input" } }),
+            })),
+            edges: workflowNodes.slice(1).map((node, index) => ({ source_node_id: workflowNodes[index].id, target_node_id: node.id })),
+            entry_node: workflowNodes[0].id,
+            output_node: workflowNodes[workflowNodes.length - 1].id,
+          },
+          input: { problem: workflowInput },
+          user_id: "local-user",
+        }),
+      });
+      if (!result.ok) throw new Error(`Workflow respondeu com HTTP ${result.status}.`);
+      setWorkflowResponse(await result.json() as WorkflowRunResponse);
+    } catch (requestError) {
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível executar o workflow.");
+    } finally {
+      setWorkflowLoading(false);
+    }
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -241,6 +387,7 @@ export default function App() {
 
           <nav className="nav-list" aria-label="Agent sections">
             <button className={`nav-item ${activeSection === "builder" ? "active" : ""}`} onClick={() => setActiveSection("builder")}><Activity size={16} /> Builder canvas</button>
+            <button className={`nav-item ${activeSection === "workflow" ? "active" : ""}`} onClick={() => setActiveSection("workflow")}><Workflow size={16} /> Workflows</button>
             <button className={`nav-item ${activeSection === "definition" ? "active" : ""}`} onClick={() => setActiveSection("definition")}><Layers3 size={16} /> Definition</button>
             <button className={`nav-item ${activeSection === "memory" ? "active" : ""}`} onClick={() => setActiveSection("memory")}><Database size={16} /> Memory</button>
             <button className={`nav-item ${activeSection === "trace" ? "active" : ""}`} onClick={() => setActiveSection("trace")}><GitBranch size={16} /> Trace</button>
@@ -314,6 +461,99 @@ export default function App() {
             </div>
             </div>
           </>}
+
+          {activeSection === "workflow" && (
+            <div className="workflow-page">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">Workflow demo</div>
+                  <h2>{workflowName || "Novo workflow"}</h2>
+                </div>
+                <div className="run-count"><span className="pulse" /> {workflowNodes.length} nós · linear</div>
+              </div>
+
+              <div className="workflow-config">
+                <div className="field-group">
+                  <label>Nome do workflow</label>
+                  <input value={workflowName} onChange={(event) => setWorkflowName(event.target.value)} />
+                </div>
+                <div className="workflow-config__meta"><span>Composição atual</span><strong>{workflowNodes.length} agentes</strong></div>
+              </div>
+
+              <div className="workflow-canvas">
+                {workflowNodes.map((node, index) => {
+                  const selectedAgent = [...workflowDemoAgents, ...agents].find((agent) => agent.id === node.agent_id);
+                  return (
+                    <div className="workflow-node-row" key={node.id}>
+                      <div className={`workflow-node ${index === 0 ? "workflow-node--pm" : "workflow-node--architect"}`}>
+                        <div className="workflow-node__icon">{index === 0 ? <Bot size={18} /> : <Layers3 size={18} />}</div>
+                        <div>
+                          <span>AGENT · {String(index + 1).padStart(2, "0")}</span>
+                          <select value={node.agent_id} onChange={(event) => updateWorkflowNode(node.id, event.target.value)} aria-label={`Agent node ${index + 1}`}>
+                            {[...workflowDemoAgents, ...agents.filter((agent) => !workflowDemoAgents.some((demoAgent) => demoAgent.id === agent.id))].map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                          </select>
+                          <small>{selectedAgent?.id ?? "Selecione um agente salvo."}</small>
+                        </div>
+                        <div className="workflow-node__controls">
+                          <button type="button" onClick={() => moveWorkflowNode(index, -1)} disabled={index === 0} aria-label="Move node up">↑</button>
+                          <button type="button" onClick={() => moveWorkflowNode(index, 1)} disabled={index === workflowNodes.length - 1} aria-label="Move node down">↓</button>
+                          <button type="button" onClick={() => removeWorkflowNode(node.id)} disabled={workflowNodes.length === 1} aria-label="Remove node">×</button>
+                        </div>
+                      </div>
+                      {index < workflowNodes.length - 1 && <div className="workflow-connector"><span>artifact</span><div /></div>}
+                    </div>
+                  );
+                })}
+                <button type="button" className="workflow-add-node" onClick={addWorkflowNode}><Plus size={16} /> Add agent node</button>
+              </div>
+
+              <form className="workflow-input" onSubmit={runWorkflow}>
+                <div className="field-group field-group--full">
+                  <label>Problema de entrada</label>
+                  <textarea value={workflowInput} onChange={(event) => setWorkflowInput(event.target.value)} rows={6} />
+                </div>
+                <div className="workflow-actions">
+                  <span>Os agentes demo serão salvos como drafts automaticamente.</span>
+                  <button type="submit" className="composer-button" disabled={workflowLoading}>
+                    {workflowLoading ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
+                    {workflowLoading ? "Executando workflow" : "Executar workflow"}
+                  </button>
+                </div>
+              </form>
+
+              {workflowError && <div className="error-message"><CircleAlert size={16} /> {workflowError}</div>}
+
+              {workflowResponse ? (
+                <div className="workflow-result">
+                  <div className="workflow-result__heading">
+                    <div><div className="eyebrow">Latest workflow run</div><h3>Resultado da execução</h3></div>
+                    <span className="trace-status"><Check size={15} /> {workflowResponse.run.status}</span>
+                  </div>
+                  <div className="workflow-metrics">
+                    <div><span>Agentes</span><strong>{workflowResponse.run.node_runs.length}</strong></div>
+                    <div><span>Tokens</span><strong>{workflowResponse.run.total_tokens}</strong></div>
+                    <div><span>Custo</span><strong>{workflowResponse.run.estimated_cost === null ? "N/D" : `${workflowResponse.run.cost_currency ?? "USD"} ${workflowResponse.run.estimated_cost.toFixed(4)}`}</strong></div>
+                    <div><span>Duração</span><strong>{Math.round(workflowResponse.run.duration_ms)} ms</strong></div>
+                  </div>
+                  <div className="workflow-node-runs">
+                    {workflowResponse.run.node_runs.map((nodeRun, index) => (
+                      <div className="workflow-node-run" key={nodeRun.node_id}>
+                        <span className="trace-index">0{index + 1}</span>
+                        <div><strong>{nodeRun.node_id === "project-plan" ? "Gerente de Projetos" : "Arquiteto de Dados"}</strong><small>{nodeRun.status} · {nodeRun.total_tokens} tokens · {Math.round(nodeRun.duration_ms)} ms</small></div>
+                        <Check size={15} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="workflow-artifact">
+                    <div className="workflow-artifact__header"><FileOutput size={16} /><strong>Artefato final · arquitetura</strong><span>{workflowResponse.output.type}</span></div>
+                    <div className="answer-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{workflowResponse.output.content}</ReactMarkdown></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="inspector-empty workflow-empty"><Workflow size={28} /><p>Execute o fluxo para ver os artefatos, métricas e traces de cada agente.</p></div>
+              )}
+            </div>
+          )}
 
           {activeSection === "definition" && (
             <div className="definition-panel definition-panel--section">
@@ -446,6 +686,26 @@ export default function App() {
         </section>
 
         <aside className="inspector">
+          {activeSection === "workflow" ? (
+            <div className="workflow-inspector">
+              <div className="inspector-heading">
+                <div><div className="eyebrow">Workflow inspector</div><h2>Run overview</h2></div>
+                <Workflow size={18} />
+              </div>
+              <div className="sandbox-rules">
+                <div className="mini-stat"><GitBranch size={14} /> PM → Architect</div>
+                <div className="mini-stat"><Shield size={14} /> No tools</div>
+              </div>
+              {workflowResponse ? (
+                <div className="trace-identifiers workflow-identifiers">
+                  <div><span>Workflow run</span><code>{workflowResponse.run.id}</code></div>
+                  <div><span>Parent trace</span><code>{workflowResponse.run.trace_id}</code></div>
+                  <div><span>Models</span><code>{workflowResponse.run.models_used.join(" · ") || "local-deterministic"}</code></div>
+                </div>
+              ) : <div className="inspector-empty"><Workflow size={28} /><p>O trace pai aparecerá aqui depois da execução.</p></div>}
+            </div>
+          ) : (
+          <>
           <div className="inspector-heading">
             <div>
               <div className="eyebrow">Run inspector</div>
@@ -520,6 +780,8 @@ export default function App() {
               <Bot size={28} />
               <p>Execute a prompt to inspect memory, routing and reflection decisions.</p>
             </div>
+          )}
+          </>
           )}
         </aside>
       </section>

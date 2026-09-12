@@ -38,13 +38,13 @@ Hoje o sistema tem as seguintes limitacoes para esse caso:
 1. Uma chamada de `AgentRuntime.run` recebe um agente e uma mensagem, nao um workflow.
 2. O `GraphBuilder` constroi os nos internos de um unico agente.
 3. Os nos atuais do frontend sao toggles de capacidades; ainda nao sao nos posicionaveis ligados por arestas.
-4. Nao existe um schema persistido de workflow com agentes, tools, entradas, saidas e conexoes.
-5. Nao existe um contrato de artefato entre etapas.
+4. Existe um schema de workflow em memoria, mas ainda nao existe persistencia de workflows e versoes.
+5. Existe um contrato basico de artefato entre etapas, mas ainda falta validacao por schema de entrada e saida.
 6. Nao existe uma tool de ingestao de audio ou transcricao.
-7. Nao existe uma API para iniciar e acompanhar uma execucao longa de workflow.
-8. O tracing atual registra o run do agente, mas ainda nao organiza uma execucao pai com subexecucoes por etapa.
+7. Existe uma API sincrona para iniciar uma execucao curta, mas ainda nao existe acompanhamento de execucoes longas.
+8. Cada etapa registra seu run e trace, mas ainda falta um trace pai persistido e um estado de workflow resumivel.
 
-Portanto, essa capacidade e possivel neste repositorio, mas e uma evolucao do runtime e do builder, nao apenas o cadastro de mais agentes.
+Portanto, essa capacidade ja possui uma primeira implementacao no runtime. O proximo salto e evoluir o executor em memoria para um componente de workflows persistido e visual, nao apenas cadastrar mais agentes.
 
 ## 4. Exemplo detalhado
 
@@ -149,6 +149,8 @@ A saida pode ser:
 ```
 
 ## 5. Modelo conceitual
+
+O componente de workflows representa grafos declarativos. Um grafo pode ser linear, ramificado ou conter ciclos controlados. Os agentes sao nos reutilizaveis do grafo; o workflow define como eles colaboram e o runtime executa o grafo.
 
 Um workflow deve ser uma definicao declarativa composta por nos e arestas:
 
@@ -284,11 +286,11 @@ O roadmap atual cobre agente individual, tools, LangGraph, memoria, builder visu
 
 ### Fase W1 - Contratos e runtime
 
-- [ ] Criar `WorkflowDefinition`, `WorkflowNode` e `WorkflowEdge`.
-- [ ] Criar contratos de artefatos e validacao entre etapas.
-- [ ] Executar um workflow linear em memoria.
-- [ ] Reutilizar agentes salvos como nos de workflow.
-- [ ] Adicionar trace pai, trace por no e estado resumivel.
+- [x] Criar `WorkflowDefinition`, `WorkflowNode` e `WorkflowEdge`.
+- [~] Criar contratos de artefatos e validacao entre etapas. O contrato basico existe; validacao por schema ainda falta.
+- [x] Executar um workflow linear em memoria.
+- [x] Reutilizar agentes salvos como nos de workflow.
+- [~] Adicionar trace pai, trace por no e estado resumivel. O trace pai, traces por no e metricas agregadas ja persistem no banco; resume por checkpoint ainda falta.
 
 ### Fase W2 - Tools e transforms
 
@@ -299,7 +301,7 @@ O roadmap atual cobre agente individual, tools, LangGraph, memoria, builder visu
 
 ### Fase W3 - Builder de workflows
 
-- [ ] Canvas React Flow com nos, arestas e conexoes.
+- [~] Canvas inicial de workflow linear com selecao, adicao, remocao e reordenacao de agentes.
 - [ ] Seletor de agentes salvos e tools registradas.
 - [ ] Mapeamento de entrada e saida entre nos.
 - [ ] Validacao visual de fluxo invalido.
@@ -308,7 +310,7 @@ O roadmap atual cobre agente individual, tools, LangGraph, memoria, builder visu
 ### Fase W4 - Persistencia e operacao
 
 - [ ] Persistir workflows e versoes.
-- [ ] Persistir artefatos e historico de execucao.
+- [~] Persistir artefatos e historico de execucao. O historico do workflow e dos nos ja e persistido; artefatos ainda permanecem no payload da execucao.
 - [ ] Adicionar migrations versionadas.
 - [ ] Executar workflows longos de forma assincrona com fila.
 - [ ] Adicionar aprovacao humana e retomada.
