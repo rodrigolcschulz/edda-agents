@@ -47,6 +47,17 @@ class AgentDefinition(BaseModel):
     retrieval_top_k: int = Field(default=3, ge=1, le=10)
 
 
+class DraftResponse(BaseModel):
+    agent: AgentDefinition
+    version: int
+
+
+class DraftSummary(BaseModel):
+    id: str
+    name: str
+    version: int
+
+
 class RunRequest(BaseModel):
     thread_id: str
     user_id: str

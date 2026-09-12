@@ -25,6 +25,13 @@ CREATE TABLE agent_versions (
     FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, id)
 );
 
+CREATE TABLE agent_drafts (
+    id text PRIMARY KEY,
+    version integer NOT NULL,
+    definition jsonb NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE threads (
     id text NOT NULL,
     tenant_id uuid NOT NULL REFERENCES tenants(id),

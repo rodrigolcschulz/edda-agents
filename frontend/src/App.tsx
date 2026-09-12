@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -28,6 +28,7 @@ type RunResponse = {
   steps: RunStep[];
   memories_used: string[];
 };
+type DraftResponse = { agent: typeof defaultAgent; version: number };
 
 type BuilderNode = {
   id: string;
@@ -37,7 +38,8 @@ type BuilderNode = {
   enabled: boolean;
 };
 
-type WorkspaceSection = "builder" | "definition" | "memory";
+type WorkspaceSection = "builder" | "definition" | "memory" | "agents";
+type AgentSummary = { id: string; name: string; version: number };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -48,34 +50,75 @@ const defaultNodes: BuilderNode[] = [
   { id: "guardrail", title: "Guardrails", kind: "guardrail", description: "Validate input and output before execution.", enabled: true },
 ];
 
+const defaultAgent = {
+  id: "atlas-support",
+  name: "Atlas Support",
+  system_prompt: "Aid users with accurate answers, grounded policy references, and safe tool usage.",
+  model: "qwen3:14b",
+  retrieval_enabled: true,
+  retrieval_top_k: 3,
+  tools: [{ name: "echo", description: "Returns a result for local testing", requires_confirmation: false }],
+  rules: [
+    { name: "no-private-data", stage: "input", blocked_terms: ["senha", "token", "secret"] },
+    { name: "confidential-policy", stage: "output", blocked_terms: ["ignorar regras"] },
+  ],
+};
+
 export default function App() {
-  const [agentName, setAgentName] = useState("Atlas Support");
-  const [systemPrompt, setSystemPrompt] = useState("Aid users with accurate answers, grounded policy references, and safe tool usage.");
-  const [model, setModel] = useState("qwen3:14b");
-  const [retrievalEnabled, setRetrievalEnabled] = useState(true);
+  const [agentName, setAgentName] = useState(defaultAgent.name);
+  const [systemPrompt, setSystemPrompt] = useState(defaultAgent.system_prompt);
+  const [model, setModel] = useState(defaultAgent.model);
+  const [retrievalEnabled, setRetrievalEnabled] = useState(defaultAgent.retrieval_enabled);
   const [message, setMessage] = useState("Qual é a política de reembolso para clientes do plano Gold?");
   const [response, setResponse] = useState<RunResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [nodes, setNodes] = useState<BuilderNode[]>(defaultNodes);
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("builder");
+  const [draftVersion, setDraftVersion] = useState<number | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [selectedAgentId, setSelectedAgentId] = useState(defaultAgent.id);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
 
   const generatedAgent = useMemo(
     () => ({
-      id: "atlas-support",
+      id: selectedAgentId,
       name: agentName,
       system_prompt: systemPrompt,
       model,
       retrieval_enabled: retrievalEnabled,
       retrieval_top_k: 3,
-      tools: [{ name: "echo", description: "Returns a result for local testing", requires_confirmation: false }],
-      rules: [
-        { name: "no-private-data", stage: "input", blocked_terms: ["senha", "token", "secret"] },
-        { name: "confidential-policy", stage: "output", blocked_terms: ["ignorar regras"] },
-      ],
+      tools: defaultAgent.tools,
+      rules: defaultAgent.rules,
     }),
-    [agentName, model, retrievalEnabled, systemPrompt],
+    [agentName, model, retrievalEnabled, systemPrompt, selectedAgentId],
   );
+
+  useEffect(() => {
+    fetch(`${API_URL}/v1/agents/drafts`)
+      .then((result) => result.ok ? result.json() as Promise<AgentSummary[]> : [])
+      .then((savedAgents) => {
+        setAgents(savedAgents);
+        const firstAgent = savedAgents.find((agent) => agent.id === defaultAgent.id) ?? savedAgents[0];
+        if (firstAgent) loadAgent(firstAgent.id);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function loadAgent(agentId: string) {
+    const result = await fetch(`${API_URL}/v1/agents/drafts/${agentId}`);
+    if (!result.ok) return;
+    const draft = await result.json() as DraftResponse;
+    setSelectedAgentId(draft.agent.id);
+    setAgentName(draft.agent.name);
+    setSystemPrompt(draft.agent.system_prompt);
+    setModel(draft.agent.model);
+    setRetrievalEnabled(draft.agent.retrieval_enabled);
+    setDraftVersion(draft.version);
+    setResponse(null);
+    setSaveState("idle");
+    setActiveSection("builder");
+  }
 
   function toggleNode(nodeId: string) {
     setNodes((current) =>
@@ -106,6 +149,31 @@ export default function App() {
       setError(requestError instanceof Error ? requestError.message : "Não foi possível executar o agente.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveDraft() {
+    if (saveState === "saving") return;
+    setSaveState("saving");
+    try {
+      const result = await fetch(`${API_URL}/v1/agents/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(generatedAgent),
+      });
+      if (!result.ok) throw new Error(`Não foi possível salvar o draft (HTTP ${result.status}).`);
+      const saved = await result.json() as DraftResponse;
+      setSelectedAgentId(saved.agent.id);
+      setDraftVersion(saved.version);
+      setAgents((current) => {
+        const summary = { id: saved.agent.id, name: saved.agent.name, version: saved.version };
+        return current.some((agent) => agent.id === summary.id)
+          ? current.map((agent) => agent.id === summary.id ? summary : agent)
+          : [summary, ...current];
+      });
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
     }
   }
 
@@ -147,7 +215,25 @@ export default function App() {
             <button className={`nav-item ${activeSection === "builder" ? "active" : ""}`} onClick={() => setActiveSection("builder")}><Activity size={16} /> Builder canvas</button>
             <button className={`nav-item ${activeSection === "definition" ? "active" : ""}`} onClick={() => setActiveSection("definition")}><Layers3 size={16} /> Definition</button>
             <button className={`nav-item ${activeSection === "memory" ? "active" : ""}`} onClick={() => setActiveSection("memory")}><Database size={16} /> Memory</button>
+            <button className={`nav-item ${activeSection === "agents" ? "active" : ""}`} onClick={() => setActiveSection("agents")}><Bot size={16} /> Agents</button>
           </nav>
+
+          {activeSection === "agents" && (
+            <div className="agent-list">
+              <div className="eyebrow">Saved agents</div>
+              {agents.length ? agents.map((agent) => (
+                <button
+                  type="button"
+                  key={agent.id}
+                  className={`agent-list-item ${selectedAgentId === agent.id ? "active" : ""}`}
+                  onClick={() => loadAgent(agent.id)}
+                >
+                  <span>{agent.name}</span>
+                  <small>v{agent.version}</small>
+                </button>
+              )) : <p className="agent-list-empty">No saved agents yet.</p>}
+            </div>
+          )}
 
           <div className="sidebar-footer">
             <span className="status-dot" /> Local runtime ready
@@ -209,9 +295,9 @@ export default function App() {
                 <input type="checkbox" checked={retrievalEnabled} onChange={() => setRetrievalEnabled((current) => !current)} />
                 <span>Enable retrieval / RAG</span>
               </label>
-              <button type="button" className="secondary-btn">
+              <button type="button" className="secondary-btn" onClick={saveDraft} disabled={saveState === "saving"}>
                 <Sparkles size={16} />
-                Save draft
+                {saveState === "saving" ? "Saving..." : saveState === "saved" ? `Saved v${draftVersion}` : saveState === "error" ? "Save failed" : "Save draft"}
               </button>
             </div>
             </div>
@@ -251,6 +337,19 @@ export default function App() {
               ) : (
                 <div className="inspector-empty">Run the sandbox to populate thread memory.</div>
               )}
+            </div>
+          )}
+
+          {activeSection === "agents" && (
+            <div className="definition-panel definition-panel--section">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">Agents</div>
+                  <h2>Choose an agent</h2>
+                </div>
+                <Bot size={18} />
+              </div>
+              <p className="agent-picker-copy">Select a saved agent from the sidebar to continue editing its definition.</p>
             </div>
           )}
         </section>
