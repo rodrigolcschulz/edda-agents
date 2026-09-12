@@ -4,6 +4,8 @@
 
 Projeto de portfólio focado em demonstrar competência de **AI Engineering** (não só "chamar uma API de LLM"): orquestração de agentes, RAG, memória, roteamento de modelos, observabilidade/tracing, avaliação e segurança multi-tenant.
 
+https://github.com/user-attachments/assets/a0ba836a-f128-4905-b1c2-f3774ab14180
+
 ---
 
 ## 1. Visão do produto
