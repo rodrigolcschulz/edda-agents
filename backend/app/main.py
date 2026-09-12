@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.graph.checkpoint import PostgresCheckpointer
-from app.graph.hello import OllamaModel, deterministic_model
+from app.graph.hello import OpenAIModel, OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, RunRequest, RunResponse
@@ -50,6 +50,7 @@ runtime = AgentRuntime(
     models={
         "local-deterministic": deterministic_model,
         "qwen3:14b": OllamaModel("qwen3:14b"),
+        "gpt-4o-mini": OpenAIModel("gpt-4o-mini"),
     },
     tracer=LangfuseClient(),
 )

@@ -4,6 +4,7 @@ import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -28,8 +29,16 @@ class EvalResult:
     passed: bool
 
 
+@dataclass(frozen=True)
+class RegressionReport:
+    baseline_pass_rate: float
+    current_pass_rate: float
+    drop: float
+    passed: bool
+
+
 class AgentEvaluator:
-    """Simple deterministic evaluator suitable for local regression checks."""
+    """Deterministic evaluator suitable for local regression checks."""
 
     def __init__(self, model: Callable[[str], str]) -> None:
         self._model = model
@@ -38,7 +47,7 @@ class AgentEvaluator:
         results: list[EvalResult] = []
         for case in cases:
             actual = self._model(case.input_text)
-            passed = actual.strip().casefold() == case.expected_output.strip().casefold()
+            passed = self._matches(case, actual)
             results.append(
                 EvalResult(
                     name=case.name,
@@ -56,6 +65,43 @@ class AgentEvaluator:
         if not results:
             return 0.0
         return sum(1 for result in results if result.passed) / len(results)
+
+    @staticmethod
+    def compare_to_baseline(
+        baseline: Sequence[EvalResult],
+        current: Sequence[EvalResult],
+        max_drop: float = 0.0,
+    ) -> RegressionReport:
+        baseline_pass_rate = AgentEvaluator.pass_rate(baseline)
+        current_pass_rate = AgentEvaluator.pass_rate(current)
+        drop = baseline_pass_rate - current_pass_rate
+        return RegressionReport(
+            baseline_pass_rate=baseline_pass_rate,
+            current_pass_rate=current_pass_rate,
+            drop=drop,
+            passed=drop <= max_drop,
+        )
+
+    @staticmethod
+    def _matches(case: EvalCase, actual: str) -> bool:
+        expected = case.expected_output.strip().casefold()
+        normalized_actual = actual.strip().casefold()
+        match = case.metadata.get("match", "exact")
+        if match == "contains":
+            return expected in normalized_actual
+        if match == "not_contains":
+            return expected not in normalized_actual
+        if match != "exact":
+            raise ValueError(f"Unsupported evaluation match mode: {match}")
+        return normalized_actual == expected
+
+
+def load_eval_cases(path: str | Path) -> list[EvalCase]:
+    """Load a versioned evaluation dataset from a JSON array."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError("Evaluation dataset must be a JSON array.")
+    return [EvalCase(**case) for case in payload]
 
 
 class LangfuseClient:

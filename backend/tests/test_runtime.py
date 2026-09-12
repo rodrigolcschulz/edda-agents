@@ -1,9 +1,10 @@
 import json
 import time
+from pathlib import Path
 
 from app.graph.runtime import AgentRuntime
-from app.graph.hello import OllamaModel, build_hello_graph
-from app.observability.langfuse import AgentEvaluator, EvalCase, LangfuseClient
+from app.graph.hello import OpenAIModel, OllamaModel, build_hello_graph
+from app.observability.langfuse import AgentEvaluator, EvalCase, LangfuseClient, load_eval_cases
 from app.memory.store import InMemoryStore
 from app.models.agent import AgentDefinition, AgentRule, ModelRouterDefinition, RuleStage, RunRequest, ToolDefinition
 from app.tools.registry import ToolRegistry
@@ -273,6 +274,39 @@ def test_ollama_model_exposes_token_usage(monkeypatch) -> None:
     assert response.usage == {"input": 11, "output": 7}
 
 
+def test_openai_model_parses_chat_response_and_usage(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [{"message": {"content": "simple answer"}}],
+                    "usage": {"prompt_tokens": 13, "completion_tokens": 5},
+                }
+            ).encode()
+
+    def fake_urlopen(request, **kwargs):
+        captured["request"] = request
+        captured["kwargs"] = kwargs
+        return FakeResponse()
+
+    monkeypatch.setattr("app.graph.hello.urlopen", fake_urlopen)
+    response = OpenAIModel(model="gpt-4o-mini", api_key="test-key").generate("hello")
+
+    assert response.content == "simple answer"
+    assert response.usage == {"input": 13, "output": 5}
+    assert captured["kwargs"] == {"timeout": 120.0}
+    assert captured["request"].full_url == "https://api.openai.com/v1/chat/completions"
+    assert captured["request"].get_header("Authorization") == "Bearer test-key"
+
+
 def test_langfuse_generation_includes_usage_and_duration(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -353,3 +387,13 @@ def test_agent_evaluator_scores_matches_and_reports_pass_rate() -> None:
     assert [item.passed for item in results] == [True, True]
     assert results[0].score == 1.0
     assert evaluator.pass_rate(results) == 1.0
+
+
+def test_support_evaluation_dataset_is_versioned_and_loadable() -> None:
+    dataset_path = Path(__file__).parents[1] / "evals" / "datasets" / "support.json"
+
+    cases = load_eval_cases(dataset_path)
+
+    assert len(cases) == 3
+    assert cases[0].metadata["match"] == "contains"
+    assert cases[1].metadata["category"] == "safety"

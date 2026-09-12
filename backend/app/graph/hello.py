@@ -67,6 +67,62 @@ class OllamaModel:
         )
 
 
+class OpenAIModel:
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 120.0,
+    ) -> None:
+        self.model = model
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+        self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
+        self.timeout = timeout
+
+    def __call__(self, message: str) -> str:
+        return self.generate(message).content
+
+    def generate(self, message: str) -> ModelResponse:
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": message}],
+                "stream": False,
+            }
+        ).encode("utf-8")
+        request = Request(
+            f"{self.base_url}/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                result = json.load(response)
+        except (HTTPError, URLError, TimeoutError) as error:
+            raise RuntimeError(f"OpenAI request failed for model '{self.model}'.") from error
+
+        try:
+            content = result["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as error:
+            raise RuntimeError("OpenAI returned an invalid chat response.") from error
+        usage = result.get("usage", {})
+        return ModelResponse(
+            content=content,
+            usage={
+                "input": int(usage.get("prompt_tokens", 0)),
+                "output": int(usage.get("completion_tokens", 0)),
+            },
+        )
+
+
 def deterministic_model(message: str) -> str:
     """Development model used to exercise graph execution without credentials."""
     return f"Deterministic response: {message}"

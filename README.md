@@ -118,9 +118,9 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Trace local do runtime visível no frontend (passos, status e memória usada)
 - [x] Instrumentação opcional do run em Langfuse: input, output, modelo e registro de geração
 - [x] Todo run instrumentado no Langfuse: input, output, custo local zero, latência e tokens
-- [ ] Dataset de avaliação (casos de teste com resultado esperado)
-- [ ] Avaliadores automáticos (LLM-as-judge + regras determinísticas)
-- [ ] Alertas de regressão (agente ficou pior após mudança de prompt)
+- [x] Dataset JSON versionado de avaliação (`backend/evals/datasets`)
+- [x] Avaliador determinístico com regras `exact`, `contains` e `not_contains`
+- [x] Comparação contra baseline com detecção de queda na taxa de aprovação
 
 ### Fase 5 — Multi-tenancy, segurança e produção
 - [ ] Auth (JWT) + isolamento por tenant (RLS no Postgres)
@@ -246,3 +246,11 @@ API: `GET /health` e `POST /v1/agents/run`.
 ```bash
 pytest
 ```
+
+Para executar a avaliação versionada contra o runtime real sem usar um provedor externo:
+
+```bash
+agent-eval --model local-deterministic --min-pass-rate 1.0
+```
+
+Também é possível testar um modelo configurado localmente com `--model qwen3:14b` ou `--model gpt-4o-mini`. Esses modos podem consumir recursos ou créditos; o CI usa somente o modelo determinístico.

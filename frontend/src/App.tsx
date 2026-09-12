@@ -172,6 +172,7 @@ export default function App() {
                 <select value={model} onChange={(event) => setModel(event.target.value)}>
                   <option value="qwen3:14b">qwen3:14b</option>
                   <option value="local-deterministic">local-deterministic</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
                 </select>
               </div>
             </div>

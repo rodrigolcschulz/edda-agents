@@ -1,0 +1,2 @@
+[console_scripts]
+agent-eval = evals.run:main
