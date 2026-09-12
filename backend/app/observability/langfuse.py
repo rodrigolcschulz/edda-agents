@@ -137,6 +137,7 @@ class LangfuseClient:
         trace_id: str | None = None,
         duration_ms: float | None = None,
         usage: dict[str, int] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str | None:
         if not self.enabled:
             return None
@@ -157,6 +158,8 @@ class LangfuseClient:
         }
         if usage:
             body["usage"] = {**usage, "total": sum(usage.values())}
+        if metadata:
+            body["metadata"] = metadata
         payload = json.dumps({"batch": [{"type": "generation-create", "body": body}]}).encode("utf-8")
         credentials = base64.b64encode(f"{self.public_key}:{self.secret_key}".encode("utf-8")).decode("ascii")
         request = Request(

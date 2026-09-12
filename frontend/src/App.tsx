@@ -15,6 +15,7 @@ import {
   Shield,
   Sparkles,
   Wand2,
+  Plus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -120,6 +121,19 @@ export default function App() {
     setActiveSection("builder");
   }
 
+  function createAgent() {
+    const id = `agent-${Date.now()}`;
+    setSelectedAgentId(id);
+    setAgentName("New agent");
+    setSystemPrompt(defaultAgent.system_prompt);
+    setModel(defaultAgent.model);
+    setRetrievalEnabled(defaultAgent.retrieval_enabled);
+    setDraftVersion(null);
+    setResponse(null);
+    setSaveState("idle");
+    setActiveSection("builder");
+  }
+
   function toggleNode(nodeId: string) {
     setNodes((current) =>
       current.map((node) =>
@@ -220,7 +234,13 @@ export default function App() {
 
           {activeSection === "agents" && (
             <div className="agent-list">
-              <div className="eyebrow">Saved agents</div>
+              <div className="agent-list-heading">
+                <div className="eyebrow">Saved agents</div>
+                <button type="button" className="agent-list-add" onClick={createAgent} title="Create agent">
+                  <Plus size={14} />
+                  <span>New agent</span>
+                </button>
+              </div>
               {agents.length ? agents.map((agent) => (
                 <button
                   type="button"

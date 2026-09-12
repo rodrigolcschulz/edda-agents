@@ -30,6 +30,8 @@ def test_runs_plan_act_reflect_cycle() -> None:
     )
 
     assert response.status == "completed"
+    assert response.run_id
+    assert response.trace_id
     assert response.answer == "Support: result for Use echo for this request"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect"]
 
@@ -105,6 +107,32 @@ def test_runtime_loops_until_reflection_resolves_or_max_steps() -> None:
 
     assert response.status == "completed"
     assert [step.name for step in response.steps] == ["memory", "plan", "act", "reflect", "plan", "act", "reflect"]
+
+
+def test_runtime_accumulates_model_usage_across_reflection_cycles() -> None:
+    agent = AgentDefinition(id="usage", name="Usage", system_prompt="Help.", max_steps=2)
+    calls = 0
+
+    def model(prompt: str):
+        nonlocal calls
+        calls += 1
+        from app.graph.hello import ModelResponse
+
+        return ModelResponse(content=f"answer {calls}", usage={"input": 10, "output": 4})
+
+    runtime = AgentRuntime(
+        tools=ToolRegistry(),
+        memory=InMemoryStore(),
+        model=model,
+        continuation_policy=lambda _agent, loop_count, _answer: loop_count < 2,
+    )
+
+    response = runtime.run(agent, RunRequest(thread_id="usage", user_id="user-1", message="hello"))
+
+    assert response.status == "completed"
+    assert response.input_tokens == 20
+    assert response.output_tokens == 8
+    assert response.total_tokens == 28
 
 
 def test_docker_tool_sandbox_disables_network_and_limits_resources(monkeypatch) -> None:
@@ -372,6 +400,10 @@ def test_runtime_records_langfuse_trace_for_each_run(monkeypatch) -> None:
     assert response.status == "completed"
     assert captured and captured[0]["name"] == "agent-runtime"
     assert "hello" in captured[0]["input_text"]
+    assert captured[0]["trace_id"] == response.trace_id
+    assert captured[0]["metadata"]["run_id"] == response.run_id
+    assert captured[0]["metadata"]["agent_id"] == "trace"
+    assert captured[0]["model"] == "local-deterministic"
     assert captured[0]["duration_ms"] >= 0
 
 

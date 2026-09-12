@@ -1,4 +1,7 @@
 .agent-list { margin-top: 18px; display: grid; gap: 8px; }
+.agent-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-list-add { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 3px 0; color: #8fd8c0; background: transparent; font-size: 11px; }
+.agent-list-add:hover { color: #d9f7ec; }
 .agent-list-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px; border: 1px solid #213640; border-radius: 8px; background: rgba(14, 24, 30, 0.6); color: #c9d9dc; text-align: left; }
 .agent-list-item.active { border-color: rgba(102,197,163,.5); background: rgba(102,197,163,.1); color: #effcf8; }
 .agent-list-item small { color: #88a1aa; }

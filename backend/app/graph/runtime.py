@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from collections.abc import Callable
 from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 from app.graph.builder import ContinuationPolicy, GraphBuilder, Model
 from app.graph.hello import ModelResponse
@@ -41,6 +42,8 @@ class AgentRuntime:
         self._checkpointer = checkpointer
 
     def run(self, agent: AgentDefinition, request: RunRequest) -> RunResponse:
+        run_id = str(uuid4())
+        trace_id = str(uuid4())
         graph = GraphBuilder(
             tools=self._tools,
             memory=self._memory,
@@ -57,8 +60,16 @@ class AgentRuntime:
             {"configurable": {"thread_id": request.thread_id}},
         )
         duration_ms = (perf_counter() - started_at) * 1000
+        usage = result.get("model_usage", {})
+        input_tokens = usage.get("input", 0)
+        output_tokens = usage.get("output", 0)
         response = RunResponse(
             thread_id=request.thread_id,
+            run_id=run_id,
+            trace_id=trace_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
             answer=result["answer"],
             status=result["status"],
             steps=result.get("steps", []),
@@ -70,9 +81,16 @@ class AgentRuntime:
                     name="agent-runtime",
                     input_text=request.message,
                     output_text=response.answer,
-                    model=agent.model,
+                    model=result.get("model_name", agent.model),
+                    trace_id=trace_id,
                     duration_ms=duration_ms,
-                    usage=result.get("model_usage", {}),
+                    usage=usage,
+                    metadata={
+                        "run_id": run_id,
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "thread_id": request.thread_id,
+                    },
                 )
             except RuntimeError:
                 pass

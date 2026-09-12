@@ -19,3 +19,17 @@ def test_agent_drafts_are_versioned_and_reloaded() -> None:
     version, saved_agent = saved
     assert version == 2
     assert saved_agent.name == "Atlas Support Updated"
+
+
+def test_agent_drafts_list_keeps_different_agents() -> None:
+    store = AgentDraftStore()
+    first = AgentDefinition(id="data-architect", name="Arquiteto de Dados e Software", system_prompt="Architect.")
+    second = AgentDefinition(id="project-manager", name="Gerente de Projetos", system_prompt="Plan.")
+
+    store.save(first)
+    store.save(second)
+
+    assert {(agent_id, name) for agent_id, name, _ in store.list()} == {
+        ("data-architect", "Arquiteto de Dados e Software"),
+        ("project-manager", "Gerente de Projetos"),
+    }

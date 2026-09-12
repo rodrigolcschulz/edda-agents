@@ -73,6 +73,11 @@ class RunStep(BaseModel):
 
 class RunResponse(BaseModel):
     thread_id: str
+    run_id: str
+    trace_id: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
     answer: str
     status: str
     steps: list[RunStep]

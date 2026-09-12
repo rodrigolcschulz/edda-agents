@@ -108,7 +108,12 @@ class GraphBuilder:
             context = state.get("context", [])
             reflection = self._reflector(agent, state["result"], [*state["memories"], *context], model)
             answer = getattr(reflection, "content", reflection)
-            model_usage = getattr(reflection, "usage", {})
+            previous_usage = state.get("model_usage", {})
+            current_usage = getattr(reflection, "usage", {})
+            model_usage = {
+                "input": previous_usage.get("input", 0) + current_usage.get("input", 0),
+                "output": previous_usage.get("output", 0) + current_usage.get("output", 0),
+            }
             loop_count = state["loop_count"] + 1
             return {
                 "answer": answer,
