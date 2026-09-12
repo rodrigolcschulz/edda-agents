@@ -37,6 +37,8 @@ type BuilderNode = {
   enabled: boolean;
 };
 
+type WorkspaceSection = "builder" | "definition" | "memory";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 const defaultNodes: BuilderNode[] = [
@@ -56,6 +58,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [nodes, setNodes] = useState<BuilderNode[]>(defaultNodes);
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>("builder");
 
   const generatedAgent = useMemo(
     () => ({
@@ -141,9 +144,9 @@ export default function App() {
           </div>
 
           <nav className="nav-list" aria-label="Agent sections">
-            <button className="nav-item active"><Activity size={16} /> Builder canvas</button>
-            <button className="nav-item"><Layers3 size={16} /> Definition</button>
-            <button className="nav-item"><Database size={16} /> Memory</button>
+            <button className={`nav-item ${activeSection === "builder" ? "active" : ""}`} onClick={() => setActiveSection("builder")}><Activity size={16} /> Builder canvas</button>
+            <button className={`nav-item ${activeSection === "definition" ? "active" : ""}`} onClick={() => setActiveSection("definition")}><Layers3 size={16} /> Definition</button>
+            <button className={`nav-item ${activeSection === "memory" ? "active" : ""}`} onClick={() => setActiveSection("memory")}><Database size={16} /> Memory</button>
           </nav>
 
           <div className="sidebar-footer">
@@ -153,13 +156,14 @@ export default function App() {
         </aside>
 
         <section className="main-panel main-panel--builder">
-          <div className="panel-heading">
-            <div>
-              <div className="eyebrow">Flow builder</div>
-              <h2>Agent graph</h2>
+          {activeSection === "builder" && <>
+            <div className="panel-heading">
+              <div>
+                <div className="eyebrow">Flow builder</div>
+                <h2>Agent graph</h2>
+              </div>
+              <div className="run-count"><span className="pulse" /> Editable</div>
             </div>
-            <div className="run-count"><span className="pulse" /> Editable</div>
-          </div>
 
           <div className="builder-surface">
             <div className="builder-header-row">
@@ -210,7 +214,45 @@ export default function App() {
                 Save draft
               </button>
             </div>
-          </div>
+            </div>
+          </>}
+
+          {activeSection === "definition" && (
+            <div className="definition-panel definition-panel--section">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">Definition</div>
+                  <h2>Agent config</h2>
+                </div>
+                <Wand2 size={18} />
+              </div>
+              <pre>{JSON.stringify(generatedAgent, null, 2)}</pre>
+            </div>
+          )}
+
+          {activeSection === "memory" && (
+            <div className="definition-panel definition-panel--section">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">Memory</div>
+                  <h2>Thread context</h2>
+                </div>
+                <Database size={18} />
+              </div>
+              {response ? (
+                <div className="memory-detail">
+                  <p>Context recalled during the latest sandbox run.</p>
+                  {response.memories_used.length ? (
+                    <ul>{response.memories_used.map((memory, index) => <li key={`${memory}-${index}`}>{memory}</li>)}</ul>
+                  ) : (
+                    <div className="inspector-empty">No previous context in this thread.</div>
+                  )}
+                </div>
+              ) : (
+                <div className="inspector-empty">Run the sandbox to populate thread memory.</div>
+              )}
+            </div>
+          )}
         </section>
 
         <aside className="inspector">
@@ -292,16 +334,6 @@ export default function App() {
         </aside>
       </section>
 
-      <section className="definition-panel">
-        <div className="panel-heading">
-          <div>
-            <div className="eyebrow">Definition</div>
-            <h2>Agent config</h2>
-          </div>
-          <Wand2 size={18} />
-        </div>
-        <pre>{JSON.stringify(generatedAgent, null, 2)}</pre>
-      </section>
     </main>
   );
 }

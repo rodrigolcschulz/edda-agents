@@ -135,7 +135,11 @@ button { cursor: pointer; }
 .inspector-empty { display: grid; place-items: center; text-align: center; gap: 12px; color: #8ea4ac; min-height: 160px; border: 1px dashed #2f4550; border-radius: 10px; padding: 12px; margin-top: 16px; }
 
 .definition-panel { margin: 0 30px 30px; padding: 18px 20px 20px; }
+.definition-panel--section { margin: 24px 0 0; }
 .definition-panel pre { margin: 16px 0 0; padding: 16px; border-radius: 10px; background: rgba(8, 15, 18, 0.8); border: 1px solid #263d46; color: #d9eaf0; overflow-x: auto; font-size: 12px; line-height: 1.7; }
+.memory-detail > p { color: #9fb9bf; font-size: 13px; }
+.memory-detail ul { display: grid; gap: 10px; padding: 0; list-style: none; }
+.memory-detail li { padding: 12px; border: 1px solid #263d46; border-radius: 8px; background: rgba(8, 15, 18, 0.8); color: #d9eaf0; line-height: 1.5; }
 
 .sandbox-rules { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .mini-stat { border: 1px solid #2b4550; background: rgba(12, 18, 22, 0.8); border-radius: 999px; padding: 7px 10px; color: #a6c3c8; font-size: 11px; }
