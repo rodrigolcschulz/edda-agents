@@ -20,6 +20,7 @@ import {
   Workflow,
   Play,
   FileOutput,
+  Trash2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -88,6 +89,14 @@ type AgentSummary = { id: string; name: string; version: number };
 type WorkflowDraftNode = { id: string; agent_id: string };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1000) return `${Math.round(durationMs)} ms`;
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
 
 const defaultNodes: BuilderNode[] = [
   { id: "prompt", title: "System prompt", kind: "prompt", description: "Define the agent persona and safety posture.", enabled: true },
@@ -198,6 +207,25 @@ export default function App() {
     setRunHistory([]);
     setSaveState("idle");
     setActiveSection("builder");
+  }
+
+  async function deleteAgent(agent: AgentSummary) {
+    if (!window.confirm(`Apagar o agente "${agent.name}"? Essa ação remove o draft ${agent.id}.`)) return;
+    try {
+      const result = await fetch(`${API_URL}/v1/agents/drafts/${encodeURIComponent(agent.id)}`, { method: "DELETE" });
+      if (!result.ok) throw new Error(`Não foi possível apagar o agente (HTTP ${result.status}).`);
+      const remaining = agents.filter((item) => item.id !== agent.id);
+      setAgents(remaining);
+      if (selectedAgentId === agent.id) {
+        if (remaining[0]) {
+          await loadAgent(remaining[0].id);
+        } else {
+          createAgent();
+        }
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível apagar o agente.");
+    }
   }
 
   function createAgent() {
@@ -532,14 +560,14 @@ export default function App() {
                   <div className="workflow-metrics">
                     <div><span>Agentes</span><strong>{workflowResponse.run.node_runs.length}</strong></div>
                     <div><span>Tokens</span><strong>{workflowResponse.run.total_tokens}</strong></div>
-                    <div><span>Custo</span><strong>{workflowResponse.run.estimated_cost === null ? "N/D" : `${workflowResponse.run.cost_currency ?? "USD"} ${workflowResponse.run.estimated_cost.toFixed(4)}`}</strong></div>
-                    <div><span>Duração</span><strong>{Math.round(workflowResponse.run.duration_ms)} ms</strong></div>
+                    <div><span>Custo</span><strong>{workflowResponse.run.estimated_cost === null ? "N/D" : `${workflowResponse.run.cost_currency ?? "USD"} ${workflowResponse.run.estimated_cost.toFixed(2)}`}</strong></div>
+                    <div><span>Duração</span><strong>{formatDuration(workflowResponse.run.duration_ms)}</strong></div>
                   </div>
                   <div className="workflow-node-runs">
                     {workflowResponse.run.node_runs.map((nodeRun, index) => (
                       <div className="workflow-node-run" key={nodeRun.node_id}>
                         <span className="trace-index">0{index + 1}</span>
-                        <div><strong>{nodeRun.node_id === "project-plan" ? "Gerente de Projetos" : "Arquiteto de Dados"}</strong><small>{nodeRun.status} · {nodeRun.total_tokens} tokens · {Math.round(nodeRun.duration_ms)} ms</small></div>
+                        <div><strong>{[...workflowDemoAgents, ...agents].find((agent) => agent.id === workflowNodes[index]?.agent_id)?.name ?? nodeRun.node_id}</strong><small>{nodeRun.status} · {nodeRun.total_tokens} tokens · {formatDuration(nodeRun.duration_ms)}</small></div>
                         <Check size={15} />
                       </div>
                     ))}
@@ -670,15 +698,15 @@ export default function App() {
                   </button>
                 </div>
                 {agents.length ? agents.map((agent) => (
-                  <button
-                    type="button"
-                    key={agent.id}
-                    className={`agent-list-item ${selectedAgentId === agent.id ? "active" : ""}`}
-                    onClick={() => loadAgent(agent.id)}
-                  >
-                    <span>{agent.name}</span>
-                    <small>v{agent.version}</small>
-                  </button>
+                  <div className={`agent-list-item ${selectedAgentId === agent.id ? "active" : ""}`} key={agent.id}>
+                    <button type="button" className="agent-list-select" onClick={() => loadAgent(agent.id)}>
+                      <span>{agent.name}</span>
+                      <small>v{agent.version} · {agent.id}</small>
+                    </button>
+                    <button type="button" className="agent-list-delete" onClick={() => deleteAgent(agent)} title={`Delete ${agent.name}`} aria-label={`Delete ${agent.name}`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 )) : <p className="agent-list-empty">No saved agents yet.</p>}
               </div>
             </div>

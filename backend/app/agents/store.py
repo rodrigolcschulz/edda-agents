@@ -70,6 +70,14 @@ class AgentDraftStore:
             )
             return cursor.fetchall()
 
+    def delete(self, agent_id: str) -> bool:
+        if not self._connection:
+            return self._drafts.pop(agent_id, None) is not None
+
+        with self._connection.cursor() as cursor:
+            cursor.execute("DELETE FROM agent_drafts WHERE id = %s", (agent_id,))
+            return cursor.rowcount > 0
+
     def close(self) -> None:
         if self._connection:
             self._connection.close()

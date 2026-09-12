@@ -33,3 +33,14 @@ def test_agent_drafts_list_keeps_different_agents() -> None:
         ("data-architect", "Arquiteto de Dados e Software"),
         ("project-manager", "Gerente de Projetos"),
     }
+
+
+def test_agent_draft_can_be_deleted_by_id() -> None:
+    store = AgentDraftStore()
+    store.save(AgentDefinition(id="duplicate-a", name="Duplicate", system_prompt="A"))
+    store.save(AgentDefinition(id="duplicate-b", name="Duplicate", system_prompt="B"))
+
+    assert store.delete("duplicate-a") is True
+    assert store.get("duplicate-a") is None
+    assert store.get("duplicate-b") is not None
+    assert store.delete("missing") is False

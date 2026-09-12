@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.store import AgentDraftStore
@@ -138,3 +138,16 @@ def get_draft(agent_id: str) -> DraftResponse:
 
 
 app.get("/v1/agents/drafts/{agent_id}", response_model=DraftResponse)(get_draft)
+
+
+def delete_draft(agent_id: str) -> Response:
+    if draft_store is None:
+        raise RuntimeError("Draft store is not initialized.")
+    if not draft_store.delete(agent_id):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Agent draft not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+app.delete("/v1/agents/drafts/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)(delete_draft)

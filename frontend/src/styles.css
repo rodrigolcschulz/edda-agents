@@ -3,9 +3,13 @@
 .agent-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .agent-list-add { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 3px 0; color: #8fd8c0; background: transparent; font-size: 11px; }
 .agent-list-add:hover { color: #d9f7ec; }
-.agent-list-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px; border: 1px solid #213640; border-radius: 8px; background: rgba(14, 24, 30, 0.6); color: #c9d9dc; text-align: left; }
+.agent-list-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 5px; border: 1px solid #213640; border-radius: 8px; background: rgba(14, 24, 30, 0.6); color: #c9d9dc; text-align: left; }
 .agent-list-item.active { border-color: rgba(102,197,163,.5); background: rgba(102,197,163,.1); color: #effcf8; }
-.agent-list-item small { color: #88a1aa; }
+.agent-list-select { display: grid; flex: 1; gap: 3px; min-width: 0; padding: 5px; border: 0; color: inherit; background: transparent; text-align: left; }
+.agent-list-select span, .agent-list-select small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-list-select small { color: #88a1aa; font-size: 10px; }
+.agent-list-delete { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid transparent; border-radius: 6px; color: #b4837d; background: transparent; }
+.agent-list-delete:hover { border-color: rgba(206, 96, 96, .45); color: #f0b1a7; background: rgba(125, 46, 46, .25); }
 .agent-list-empty, .agent-picker-copy { color: #8ea4ac; font-size: 13px; line-height: 1.5; }
 :root {
   font-family: "Avenir Next", "Trebuchet MS", sans-serif;
