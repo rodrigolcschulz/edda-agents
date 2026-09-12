@@ -81,6 +81,7 @@ export default function App() {
   const [retrievalEnabled, setRetrievalEnabled] = useState(defaultAgent.retrieval_enabled);
   const [message, setMessage] = useState("Qual é a política de reembolso para clientes do plano Gold?");
   const [response, setResponse] = useState<RunResponse | null>(null);
+  const [runHistory, setRunHistory] = useState<RunResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [nodes, setNodes] = useState<BuilderNode[]>(defaultNodes);
@@ -126,6 +127,7 @@ export default function App() {
     setRetrievalEnabled(draft.agent.retrieval_enabled);
     setDraftVersion(draft.version);
     setResponse(null);
+    setRunHistory([]);
     setSaveState("idle");
     setActiveSection("builder");
   }
@@ -139,6 +141,7 @@ export default function App() {
     setRetrievalEnabled(defaultAgent.retrieval_enabled);
     setDraftVersion(null);
     setResponse(null);
+    setRunHistory([]);
     setSaveState("idle");
     setActiveSection("builder");
   }
@@ -167,7 +170,9 @@ export default function App() {
         }),
       });
       if (!result.ok) throw new Error(`API respondeu com HTTP ${result.status}`);
-      setResponse((await result.json()) as RunResponse);
+      const nextResponse = (await result.json()) as RunResponse;
+      setResponse(nextResponse);
+      setRunHistory((current) => [nextResponse, ...current].slice(0, 10));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Não foi possível executar o agente.");
     } finally {
@@ -241,29 +246,6 @@ export default function App() {
             <button className={`nav-item ${activeSection === "trace" ? "active" : ""}`} onClick={() => setActiveSection("trace")}><GitBranch size={16} /> Trace</button>
             <button className={`nav-item ${activeSection === "agents" ? "active" : ""}`} onClick={() => setActiveSection("agents")}><Bot size={16} /> Agents</button>
           </nav>
-
-          {activeSection === "agents" && (
-            <div className="agent-list">
-              <div className="agent-list-heading">
-                <div className="eyebrow">Saved agents</div>
-                <button type="button" className="agent-list-add" onClick={createAgent} title="Create agent">
-                  <Plus size={14} />
-                  <span>New agent</span>
-                </button>
-              </div>
-              {agents.length ? agents.map((agent) => (
-                <button
-                  type="button"
-                  key={agent.id}
-                  className={`agent-list-item ${selectedAgentId === agent.id ? "active" : ""}`}
-                  onClick={() => loadAgent(agent.id)}
-                >
-                  <span>{agent.name}</span>
-                  <small>v{agent.version}</small>
-                </button>
-              )) : <p className="agent-list-empty">No saved agents yet.</p>}
-            </div>
-          )}
 
           <div className="sidebar-footer">
             <span className="status-dot" /> Local runtime ready
@@ -386,7 +368,7 @@ export default function App() {
                     <div><span>Model</span><strong>{response.model_name ?? model}</strong></div>
                     <div><span>Total tokens</span><strong>{response.total_tokens}</strong></div>
                     <div><span>Input / output</span><strong>{response.input_tokens} / {response.output_tokens}</strong></div>
-                    <div><span>Estimated cost</span><strong>{response.estimated_cost === null ? "Not configured" : `${response.cost_currency ?? "USD"} ${response.estimated_cost.toFixed(6)}`}</strong></div>
+                    <div><span>Estimated cost</span><strong>{response.estimated_cost === null ? "Not configured" : `${response.cost_currency ?? "USD"} ${response.estimated_cost.toFixed(2)}`}</strong></div>
                   </div>
                   <div className="trace-identifiers">
                     <div><span>Run ID</span><code>{response.run_id}</code></div>
@@ -401,6 +383,28 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                  {runHistory.length > 1 && (
+                    <div className="run-history">
+                      <div className="run-history-heading">
+                        <div>
+                          <div className="eyebrow">Trace history</div>
+                          <h3>Previous executions</h3>
+                        </div>
+                        <span>{runHistory.length - 1} stored</span>
+                      </div>
+                      <div className="run-history-list">
+                        {runHistory.slice(1).map((run) => (
+                          <div className="run-history-item" key={run.run_id}>
+                            <div>
+                              <strong>{run.model_name ?? model}</strong>
+                              <span>{run.status} · {run.total_tokens} tokens · {run.run_id}</span>
+                            </div>
+                            <b>{run.estimated_cost === null ? "Not configured" : `${run.cost_currency ?? "USD"} ${run.estimated_cost.toFixed(2)}`}</b>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="inspector-empty">Run the sandbox to generate a trace.</div>
@@ -417,7 +421,26 @@ export default function App() {
                 </div>
                 <Bot size={18} />
               </div>
-              <p className="agent-picker-copy">Select a saved agent from the sidebar to continue editing its definition.</p>
+              <div className="agent-list agent-list--main">
+                <div className="agent-list-heading">
+                  <div className="eyebrow">Saved agents</div>
+                  <button type="button" className="agent-list-add" onClick={createAgent} title="Create agent">
+                    <Plus size={14} />
+                    <span>New agent</span>
+                  </button>
+                </div>
+                {agents.length ? agents.map((agent) => (
+                  <button
+                    type="button"
+                    key={agent.id}
+                    className={`agent-list-item ${selectedAgentId === agent.id ? "active" : ""}`}
+                    onClick={() => loadAgent(agent.id)}
+                  >
+                    <span>{agent.name}</span>
+                    <small>v{agent.version}</small>
+                  </button>
+                )) : <p className="agent-list-empty">No saved agents yet.</p>}
+              </div>
             </div>
           )}
         </section>
