@@ -66,6 +66,7 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 | Banco | **PostgreSQL + pgvector** | dados relacionais, checkpoints, embeddings/RAG |
 | Observabilidade/tracing | **Frontend local trace + Langfuse** (self-host, MIT) | UI mostra cada passo do runtime; Langfuse registra execução, custo e avaliação |
 | Frontend | **React + React Flow** | canvas de construção do agente (nós e arestas) |
+| Transcrição de áudio | **faster-whisper** (extra opcional `speech`) | tool local para WAV, MP3, OGG e Opus, incluindo áudios do WhatsApp |
 | Fila (opcional, fase 2) | **Redis / RQ** | execução assíncrona de agentes de longa duração |
 | Sandbox de execução de tools | **Docker / gVisor / Firecracker** | isolar execução de código/tools de terceiros |
 
@@ -85,6 +86,7 @@ Um usuário entra na plataforma, monta um agente num canvas visual (system promp
 - `runs` — cada execução do agente (status, custo, duração, trace_id do Langfuse).
 - `runs` com `kind = workflow` — histórico agregado de uma execução de workflow, incluindo versão, status, tokens, custo e trace pai.
 - `workflow_node_runs` — execução de cada nó do workflow, vinculada ao run do agente, artefatos e trace da etapa.
+- `workflow_definitions` — definições JSON versionadas de workflows, com nome, nós, arestas e data de atualização.
 
 Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 
@@ -129,10 +131,15 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 ### Fase 5 — Workflows multiagente
 - [x] Contratos de workflow, nós, arestas e artefatos.
 - [x] Executor linear em memória reutilizando agentes salvos.
+- [x] Nós de `agent` e `tool` no executor, com artefatos tipados por etapa.
+- [x] Tool de transcrição local com `faster-whisper`, carregamento lazy e suporte a WAV, MP3, OGG e Opus.
+- [x] Upload multipart de áudio com limite de 25 MB e limpeza do arquivo temporário.
 - [x] API síncrona `POST /v1/workflows/run`.
 - [x] Histórico pai/filho com tokens, custos, duração e traces persistidos.
-- [~] Persistência de artefatos e definições versionadas de workflow.
-- [~] Canvas visual de workflows lineares com seleção, adição, remoção e reordenação de agentes.
+- [x] Persistência de definições de workflow com versionamento automático.
+- [x] API de workflows: salvar, listar, carregar e apagar definições.
+- [x] Canvas visual de workflows lineares com seleção, adição, remoção, reordenação e gerenciamento de workflows salvos.
+- [~] Persistência de artefatos e referências aos arquivos de entrada.
 - [ ] Branching, transforms, conditions e approvals no canvas.
 - [ ] Execução assíncrona, retries e retomada por checkpoint.
 
@@ -196,7 +203,7 @@ agentforge/
 
 ## 8. Próximo passo imediato
 
-A **Fase 3** já está em andamento no frontend com o builder visual, canvas de nós, sandbox de testes e definição declarativa do agente. O próximo avanço é conectar esse builder a uma camada de persistência real no backend e evoluir para a Fase 4 com observabilidade e avaliação estruturadas.
+A **Fase 5** já possui execução, tools, transcrição e persistência de definições. O próximo avanço é evoluir o canvas linear para suportar transforms, validação de schemas, branching, condições, aprovações humanas e execução assíncrona com retries e checkpoint.
 
 ## Observabilidade: frontend vs Langfuse
 
@@ -222,12 +229,18 @@ Legenda do roadmap: `[x]` concluído, `[~]` parcialmente concluído, `[ ]` pende
 ### Executar localmente
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"
+uv sync --extra dev
 docker compose -f infra/docker-compose.yml up -d
-uvicorn app.main:app --app-dir backend --reload
+uv run uvicorn app.main:app --app-dir backend --reload
 ```
+
+Para habilitar a transcrição local de áudio, instale também o extra `speech`:
+
+```bash
+uv sync --extra dev --extra speech
+```
+
+O modelo pode ser configurado com `WHISPER_MODEL`, `WHISPER_DEVICE` e `WHISPER_COMPUTE_TYPE`. Os padrões são `small`, `cpu` e `int8`. O modelo é carregado somente na primeira transcrição.
 
 Para habilitar o tracing, copie `.env.example` para `.env` e preencha as chaves do Langfuse. Sem as duas chaves, o cliente permanece desabilitado. O painel local do Langfuse fica em `http://localhost:3001`.
 
@@ -249,6 +262,21 @@ Para aplicar a migration de workflows:
 Get-Content infra/migrations/003_workflows.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
 ```
 
+Para aplicar a migration de definições persistidas de workflows:
+
+```powershell
+Get-Content infra/migrations/004_workflows_definitions.sql | docker compose -f infra/docker-compose.yml exec -T postgres psql -U edda_agents -d edda_agents -v ON_ERROR_STOP=1
+```
+
+Endpoints principais de workflows:
+
+- `POST /v1/workflows` — salva ou atualiza uma definição e incrementa sua versão.
+- `GET /v1/workflows` — lista workflows salvos.
+- `GET /v1/workflows/{workflow_id}` — carrega uma definição.
+- `DELETE /v1/workflows/{workflow_id}` — remove uma definição.
+- `POST /v1/workflows/run` — executa um workflow linear.
+- `POST /v1/tools/transcribe` — recebe WAV, MP3, OGG ou Opus via multipart e retorna um artefato de transcrição.
+
 Para iniciar a sandbox React em desenvolvimento:
 
 ```bash
@@ -259,6 +287,12 @@ npm run dev
 
 A sandbox fica em `http://localhost:5173` e consome a API em `http://localhost:8000`.
 
+Os testes backend podem ser executados com:
+
+```bash
+uv run pytest -q
+```
+
 Para subir o ambiente completo containerizado, incluindo backend e frontend:
 
 ```bash
@@ -267,11 +301,7 @@ docker compose -f infra/docker-compose.yml up --build -d
 
 O projeto Docker usa o nome `agent-forge`, então os containers aparecem como `agent-forge-backend-1`, `agent-forge-frontend-1` e assim por diante. URLs locais: frontend em `http://localhost:5173`, API em `http://localhost:8000` e Langfuse em `http://localhost:3001`.
 
-API: `GET /health`, `POST /v1/agents/run` e `POST /v1/workflows/run`.
-
-```bash
-pytest
-```
+API: `GET /health`, `POST /v1/agents/run`, `POST /v1/tools/transcribe`, `POST /v1/workflows/run`, além do CRUD em `/v1/workflows`.
 
 Para executar a avaliação versionada contra o runtime real sem usar um provedor externo:
 
