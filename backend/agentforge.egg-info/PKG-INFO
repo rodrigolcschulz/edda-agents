@@ -8,6 +8,9 @@ Requires-Dist: langgraph<1.0,>=0.2
 Requires-Dist: langgraph-checkpoint-postgres<4.0,>=2.0
 Requires-Dist: pydantic<3.0,>=2.9
 Requires-Dist: psycopg[binary]<4.0,>=3.2
+Requires-Dist: python-multipart<1.0,>=0.0.20
 Requires-Dist: uvicorn[standard]<1.0,>=0.30
 Provides-Extra: dev
 Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+Provides-Extra: speech
+Requires-Dist: faster-whisper<2.0,>=1.1; extra == "speech"

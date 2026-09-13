@@ -20,7 +20,9 @@ import {
   Workflow,
   Play,
   FileOutput,
+  FileAudio,
   Trash2,
+  Upload,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -45,7 +47,9 @@ type RunResponse = {
 type WorkflowArtifact = { id: string; type: string; content: string; source_node_id: string | null };
 type WorkflowNodeRun = {
   node_id: string;
-  agent_run_id: string;
+  kind: "agent" | "tool";
+  agent_run_id: string | null;
+  tool_name: string | null;
   status: string;
   model_name: string | null;
   input_tokens: number;
@@ -74,6 +78,27 @@ type WorkflowRunResponse = {
   };
   output: WorkflowArtifact;
 };
+type WorkflowSummary = { id: string; name: string; version: number };
+type SavedWorkflowResponse = {
+  workflow: {
+    id: string;
+    name: string;
+    version: number;
+    nodes: WorkflowDraftNode[];
+    edges: { source_node_id: string; target_node_id: string }[];
+    entry_node: string;
+    output_node: string;
+  };
+  version: number;
+};
+type TranscriptionResponse = {
+  type: string;
+  text: string;
+  language: string | null;
+  confidence: number | null;
+  model: string;
+  provider: string;
+};
 type DraftResponse = { agent: typeof defaultAgent; version: number };
 
 type BuilderNode = {
@@ -86,7 +111,7 @@ type BuilderNode = {
 
 type WorkspaceSection = "builder" | "workflow" | "definition" | "memory" | "trace" | "agents";
 type AgentSummary = { id: string; name: string; version: number };
-type WorkflowDraftNode = { id: string; agent_id: string };
+type WorkflowDraftNode = { id: string; kind?: "agent" | "tool"; agent_id?: string; tool_name?: string; input_mapping?: Record<string, string> };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -167,6 +192,11 @@ export default function App() {
   const [workflowResponse, setWorkflowResponse] = useState<WorkflowRunResponse | null>(null);
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [workflowError, setWorkflowError] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [transcription, setTranscription] = useState<TranscriptionResponse | null>(null);
+  const [transcriptionLoading, setTranscriptionLoading] = useState(false);
+  const [savedWorkflows, setSavedWorkflows] = useState<WorkflowSummary[]>([]);
+  const [workflowSaveState, setWorkflowSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const generatedAgent = useMemo(
     () => ({
@@ -190,6 +220,13 @@ export default function App() {
         const firstAgent = savedAgents.find((agent) => agent.id === defaultAgent.id) ?? savedAgents[0];
         if (firstAgent) loadAgent(firstAgent.id);
       })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/v1/workflows`)
+      .then((result) => result.ok ? result.json() as Promise<WorkflowSummary[]> : [])
+      .then(setSavedWorkflows)
       .catch(() => undefined);
   }, []);
 
@@ -341,6 +378,76 @@ export default function App() {
     });
   }
 
+  function currentWorkflowDefinition() {
+    return {
+      id: workflowName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "workflow",
+      name: workflowName,
+      version: 1,
+      nodes: workflowNodes.map((node, index) => ({
+        id: node.id,
+        kind: node.kind ?? "agent",
+        agent_id: node.agent_id,
+        ...(index === 0 ? {} : { input_mapping: { previous_artifact: workflowNodes[index - 1].id, source_problem: "input" } }),
+      })),
+      edges: workflowNodes.slice(1).map((node, index) => ({ source_node_id: workflowNodes[index].id, target_node_id: node.id })),
+      entry_node: workflowNodes[0].id,
+      output_node: workflowNodes[workflowNodes.length - 1].id,
+    };
+  }
+
+  async function saveWorkflow() {
+    if (workflowSaveState === "saving") return;
+    setWorkflowSaveState("saving");
+    setWorkflowError("");
+    try {
+      const result = await fetch(`${API_URL}/v1/workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentWorkflowDefinition()),
+      });
+      if (!result.ok) throw new Error(`Não foi possível salvar o workflow (HTTP ${result.status}).`);
+      const saved = await result.json() as SavedWorkflowResponse;
+      setWorkflowName(saved.workflow.name);
+      setWorkflowNodes(saved.workflow.nodes);
+      setSavedWorkflows((current) => {
+        const summary = { id: saved.workflow.id, name: saved.workflow.name, version: saved.version };
+        return current.some((workflow) => workflow.id === summary.id)
+          ? current.map((workflow) => workflow.id === summary.id ? summary : workflow)
+          : [summary, ...current];
+      });
+      setWorkflowSaveState("saved");
+    } catch (requestError) {
+      setWorkflowSaveState("error");
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível salvar o workflow.");
+    }
+  }
+
+  async function loadWorkflow(workflowId: string) {
+    try {
+      const result = await fetch(`${API_URL}/v1/workflows/${encodeURIComponent(workflowId)}`);
+      if (!result.ok) throw new Error(`Não foi possível carregar o workflow (HTTP ${result.status}).`);
+      const saved = await result.json() as SavedWorkflowResponse;
+      setWorkflowName(saved.workflow.name);
+      setWorkflowNodes(saved.workflow.nodes);
+      setWorkflowResponse(null);
+      setWorkflowSaveState("idle");
+      setWorkflowError("");
+    } catch (requestError) {
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o workflow.");
+    }
+  }
+
+  async function deleteWorkflow(workflow: WorkflowSummary) {
+    if (!window.confirm(`Apagar o workflow "${workflow.name}"?`)) return;
+    try {
+      const result = await fetch(`${API_URL}/v1/workflows/${encodeURIComponent(workflow.id)}`, { method: "DELETE" });
+      if (!result.ok) throw new Error(`Não foi possível apagar o workflow (HTTP ${result.status}).`);
+      setSavedWorkflows((current) => current.filter((item) => item.id !== workflow.id));
+    } catch (requestError) {
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível apagar o workflow.");
+    }
+  }
+
   async function runWorkflow(event: React.FormEvent) {
     event.preventDefault();
     if (!workflowInput.trim() || workflowLoading) return;
@@ -352,20 +459,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workflow: {
-            id: "sales-etl-planning",
-            name: workflowName,
-            version: 1,
-            nodes: workflowNodes.map((node, index) => ({
-              id: node.id,
-              kind: "agent",
-              agent_id: node.agent_id,
-              ...(index === 0 ? {} : { input_mapping: { previous_artifact: workflowNodes[index - 1].id, source_problem: "input" } }),
-            })),
-            edges: workflowNodes.slice(1).map((node, index) => ({ source_node_id: workflowNodes[index].id, target_node_id: node.id })),
-            entry_node: workflowNodes[0].id,
-            output_node: workflowNodes[workflowNodes.length - 1].id,
-          },
+          workflow: currentWorkflowDefinition(),
           input: { problem: workflowInput },
           user_id: "local-user",
         }),
@@ -376,6 +470,28 @@ export default function App() {
       setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível executar o workflow.");
     } finally {
       setWorkflowLoading(false);
+    }
+  }
+
+  async function transcribeAudio() {
+    if (!audioFile || transcriptionLoading) return;
+    setTranscriptionLoading(true);
+    setWorkflowError("");
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioFile);
+      const result = await fetch(`${API_URL}/v1/tools/transcribe`, { method: "POST", body: formData });
+      if (!result.ok) {
+        const detail = await result.json().catch(() => null) as { detail?: string } | null;
+        throw new Error(detail?.detail ?? `Transcrição respondeu com HTTP ${result.status}.`);
+      }
+      const nextTranscription = await result.json() as TranscriptionResponse;
+      setTranscription(nextTranscription);
+      setWorkflowInput(nextTranscription.text);
+    } catch (requestError) {
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Não foi possível transcrever o áudio.");
+    } finally {
+      setTranscriptionLoading(false);
     }
   }
 
@@ -508,6 +624,30 @@ export default function App() {
                 <div className="workflow-config__meta"><span>Composição atual</span><strong>{workflowNodes.length} agentes</strong></div>
               </div>
 
+              <div className="workflow-saved">
+                <div className="workflow-saved__heading"><div><div className="eyebrow">Saved workflows</div><strong>{savedWorkflows.length ? `${savedWorkflows.length} disponíveis` : "Nenhum salvo ainda"}</strong></div><button type="button" className="secondary-btn" onClick={saveWorkflow} disabled={workflowSaveState === "saving"}><Check size={15} />{workflowSaveState === "saving" ? "Salvando..." : workflowSaveState === "saved" ? "Salvo" : workflowSaveState === "error" ? "Falhou" : "Salvar workflow"}</button></div>
+                {savedWorkflows.length > 0 && <div className="workflow-saved__list">{savedWorkflows.map((workflow) => <div className="workflow-saved__item" key={workflow.id}><button type="button" onClick={() => loadWorkflow(workflow.id)}><strong>{workflow.name}</strong><small>v{workflow.version} · {workflow.id}</small></button><button type="button" onClick={() => deleteWorkflow(workflow)} aria-label={`Apagar ${workflow.name}`} title="Apagar workflow"><Trash2 size={15} /></button></div>)}</div>}
+              </div>
+
+              <div className="workflow-audio">
+                <div className="workflow-audio__heading">
+                  <div><div className="eyebrow">Audio input</div><h3>Transcribe a problem</h3></div>
+                  <FileAudio size={19} />
+                </div>
+                <div className="workflow-audio__controls">
+                  <label className="file-picker">
+                    <Upload size={16} />
+                    <span>{audioFile ? audioFile.name : "Choose WAV, MP3, OGG or Opus"}</span>
+                    <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,audio/ogg,audio/opus,.wav,.mp3,.ogg,.opus" onChange={(event) => setAudioFile(event.target.files?.[0] ?? null)} />
+                  </label>
+                  <button type="button" className="secondary-btn" onClick={transcribeAudio} disabled={!audioFile || transcriptionLoading}>
+                    {transcriptionLoading ? <LoaderCircle className="spin" size={16} /> : <FileAudio size={16} />}
+                    {transcriptionLoading ? "Transcribing..." : "Transcribe"}
+                  </button>
+                </div>
+                {transcription && <div className="workflow-transcript"><strong>{transcription.language ?? "auto"} · {transcription.confidence === null ? "confidence unavailable" : `${Math.round(transcription.confidence * 100)}% confidence`}</strong><p>{transcription.text}</p></div>}
+              </div>
+
               <div className="workflow-canvas">
                 {workflowNodes.map((node, index) => {
                   const selectedAgent = [...workflowDemoAgents, ...agents].find((agent) => agent.id === node.agent_id);
@@ -567,7 +707,7 @@ export default function App() {
                     {workflowResponse.run.node_runs.map((nodeRun, index) => (
                       <div className="workflow-node-run" key={nodeRun.node_id}>
                         <span className="trace-index">0{index + 1}</span>
-                        <div><strong>{[...workflowDemoAgents, ...agents].find((agent) => agent.id === workflowNodes[index]?.agent_id)?.name ?? nodeRun.node_id}</strong><small>{nodeRun.status} · {nodeRun.total_tokens} tokens · {formatDuration(nodeRun.duration_ms)}</small></div>
+                        <div><strong>{nodeRun.kind === "tool" ? nodeRun.tool_name ?? "Tool" : [...workflowDemoAgents, ...agents].find((agent) => agent.id === workflowNodes[index]?.agent_id)?.name ?? nodeRun.node_id}</strong><small>{nodeRun.status} · {nodeRun.total_tokens} tokens · {formatDuration(nodeRun.duration_ms)}</small></div>
                         <Check size={15} />
                       </div>
                     ))}

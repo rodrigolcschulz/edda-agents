@@ -80,7 +80,9 @@ class RunStore:
                 CREATE TABLE IF NOT EXISTS workflow_node_runs (
                     workflow_run_id uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
                     node_id text NOT NULL,
-                    agent_run_id uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+                    kind text NOT NULL DEFAULT 'agent',
+                    agent_run_id uuid REFERENCES runs(id) ON DELETE CASCADE,
+                    tool_name text,
                     status text NOT NULL,
                     model_name text,
                     input_tokens integer NOT NULL DEFAULT 0,
@@ -109,6 +111,9 @@ class RunStore:
                 ALTER TABLE runs ADD COLUMN IF NOT EXISTS error_code text;
                 ALTER TABLE runs ADD COLUMN IF NOT EXISTS error_message text;
                 ALTER TABLE runs ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+                ALTER TABLE workflow_node_runs ALTER COLUMN agent_run_id DROP NOT NULL;
+                ALTER TABLE workflow_node_runs ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'agent';
+                ALTER TABLE workflow_node_runs ADD COLUMN IF NOT EXISTS tool_name text;
 
                 CREATE INDEX IF NOT EXISTS runs_agent_started_idx ON runs (agent_id, started_at DESC);
                 CREATE INDEX IF NOT EXISTS runs_status_started_idx ON runs (status, started_at DESC);
@@ -213,13 +218,15 @@ class RunStore:
         cursor.execute(
             """
             INSERT INTO workflow_node_runs (
-                workflow_run_id, node_id, agent_run_id, status, model_name,
+                workflow_run_id, node_id, kind, agent_run_id, tool_name, status, model_name,
                 input_tokens, output_tokens, total_tokens, estimated_cost,
                 duration_ms, trace_id, input_artifact_ids, output_artifact_ids
             )
-            VALUES (%s::uuid, %s, %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s::uuid, %s, %s, %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (workflow_run_id, node_id) DO UPDATE SET
+                kind = EXCLUDED.kind,
                 agent_run_id = EXCLUDED.agent_run_id,
+                tool_name = EXCLUDED.tool_name,
                 status = EXCLUDED.status,
                 model_name = EXCLUDED.model_name,
                 input_tokens = EXCLUDED.input_tokens,
@@ -234,7 +241,9 @@ class RunStore:
             (
                 node_run.workflow_run_id,
                 node_run.node_id,
+                node_run.kind,
                 node_run.agent_run_id,
+                node_run.tool_name,
                 node_run.status,
                 node_run.model_name,
                 node_run.input_tokens,

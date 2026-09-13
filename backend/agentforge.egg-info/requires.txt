@@ -3,7 +3,11 @@ langgraph<1.0,>=0.2
 langgraph-checkpoint-postgres<4.0,>=2.0
 pydantic<3.0,>=2.9
 psycopg[binary]<4.0,>=3.2
+python-multipart<1.0,>=0.0.20
 uvicorn[standard]<1.0,>=0.30
 
 [dev]
 pytest<9.0,>=8.3
+
+[speech]
+faster-whisper<2.0,>=1.1

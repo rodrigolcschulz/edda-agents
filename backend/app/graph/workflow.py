@@ -14,16 +14,24 @@ from app.models.workflow import (
     WorkflowRunResponse,
 )
 from app.observability.runs import RunStore
+from app.tools.registry import ToolRegistry
 
 
 AgentResolver = Callable[[str], AgentDefinition]
 
 
 class WorkflowRuntime:
-    def __init__(self, agent_runtime: AgentRuntime, resolve_agent: AgentResolver, run_store: RunStore | None = None) -> None:
+    def __init__(
+        self,
+        agent_runtime: AgentRuntime,
+        resolve_agent: AgentResolver,
+        run_store: RunStore | None = None,
+        tools: ToolRegistry | None = None,
+    ) -> None:
         self._agent_runtime = agent_runtime
         self._resolve_agent = resolve_agent
         self._run_store = run_store
+        self._tools = tools
 
     def run(self, workflow: WorkflowDefinition, input_data: Mapping[str, Any], user_id: str = "workflow-user") -> WorkflowRunResponse:
         workflow_run = WorkflowRun(
@@ -42,27 +50,38 @@ class WorkflowRuntime:
                 workflow_run.current_node = node.id
                 node_started_at = perf_counter()
                 message = self._build_node_message(node, workflow_run.input, artifacts)
-                agent = self._resolve_agent(node.agent_id)
-                response = self._agent_runtime.run(
-                    agent,
-                    RunRequest(
-                        thread_id=f"{workflow_run.id}:{node.id}",
-                        user_id=user_id,
-                        message=message,
-                        metadata={
-                            "workflow_id": workflow.id,
-                            "parent_run_id": workflow_run.id,
-                            "parent_trace_id": workflow_run.trace_id,
-                        },
-                    ),
-                )
-                if response.status != "completed":
-                    raise RuntimeError(f"Workflow node '{node.id}' ended with status '{response.status}'.")
+                response = None
+                if node.kind == "agent":
+                    if node.agent_id is None:
+                        raise ValueError(f"Agent node '{node.id}' must define agent_id.")
+                    agent = self._resolve_agent(node.agent_id)
+                    response = self._agent_runtime.run(
+                        agent,
+                        RunRequest(
+                            thread_id=f"{workflow_run.id}:{node.id}",
+                            user_id=user_id,
+                            message=message,
+                            metadata={
+                                "workflow_id": workflow.id,
+                                "parent_run_id": workflow_run.id,
+                                "parent_trace_id": workflow_run.trace_id,
+                            },
+                        ),
+                    )
+                    if response.status != "completed":
+                        raise RuntimeError(f"Workflow node '{node.id}' ended with status '{response.status}'.")
+                    content = response.answer
+                else:
+                    if self._tools is None:
+                        raise RuntimeError("Workflow tools are not configured.")
+                    if node.tool_name is None:
+                        raise ValueError(f"Tool node '{node.id}' must define tool_name.")
+                    content = self._tools.execute(node.tool_name, message)
 
                 input_artifact_ids = [artifact.id for artifact in artifacts.values()]
                 artifact = Artifact(
-                    type=f"{node.id}-output",
-                    content=response.answer,
+                    type=node.config.get("output_type", f"{node.id}-output"),
+                    content=content,
                     source_node_id=node.id,
                 )
                 artifacts[node.id] = artifact
@@ -71,21 +90,24 @@ class WorkflowRuntime:
                     NodeRun(
                         workflow_run_id=workflow_run.id,
                         node_id=node.id,
-                        agent_run_id=response.run_id,
-                        status=response.status,
-                        model_name=response.model_name,
-                        input_tokens=response.input_tokens,
-                        output_tokens=response.output_tokens,
-                        total_tokens=response.total_tokens,
-                        estimated_cost=response.estimated_cost,
-                        cost_currency=response.cost_currency,
+                        kind=node.kind,
+                        agent_run_id=response.run_id if response else None,
+                        tool_name=node.tool_name,
+                        status=response.status if response else "completed",
+                        model_name=response.model_name if response else node.config.get("model_name"),
+                        input_tokens=response.input_tokens if response else 0,
+                        output_tokens=response.output_tokens if response else 0,
+                        total_tokens=response.total_tokens if response else 0,
+                        estimated_cost=response.estimated_cost if response else 0,
+                        cost_currency=response.cost_currency if response else "USD",
                         duration_ms=(perf_counter() - node_started_at) * 1000,
                         input_artifact_ids=input_artifact_ids,
                         output_artifact_ids=[artifact.id],
-                        trace_id=response.trace_id,
+                        trace_id=response.trace_id if response else workflow_run.trace_id,
                     )
                 )
-                self._accumulate_usage(workflow_run, response)
+                if response:
+                    self._accumulate_usage(workflow_run, response)
 
             output = artifacts[workflow.output_node]
             workflow_run.output_artifact_id = output.id

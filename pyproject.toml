@@ -9,6 +9,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=2.0,<4.0",
     "pydantic>=2.9,<3.0",
     "psycopg[binary]>=3.2,<4.0",
+    "python-multipart>=0.0.20,<1.0",
     "uvicorn[standard]>=0.30,<1.0",
 ]
 
@@ -26,6 +27,9 @@ agent-eval = "evals.run:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3,<9.0",
+]
+speech = [
+    "faster-whisper>=1.1,<2.0",
 ]
 
 [tool.pytest.ini_options]

@@ -4,14 +4,16 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 
-WorkflowNodeKind = Literal["agent"]
+WorkflowNodeKind = Literal["agent", "tool"]
 
 
 class WorkflowNode(BaseModel):
     id: str
     kind: WorkflowNodeKind
-    agent_id: str
+    agent_id: str | None = None
+    tool_name: str | None = None
     input_mapping: dict[str, str] = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowEdge(BaseModel):
@@ -29,6 +31,17 @@ class WorkflowDefinition(BaseModel):
     output_node: str
 
 
+class WorkflowDraftResponse(BaseModel):
+    workflow: WorkflowDefinition
+    version: int
+
+
+class WorkflowSummary(BaseModel):
+    id: str
+    name: str
+    version: int
+
+
 class Artifact(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     type: str
@@ -39,7 +52,9 @@ class Artifact(BaseModel):
 class NodeRun(BaseModel):
     workflow_run_id: str
     node_id: str
-    agent_run_id: str
+    kind: WorkflowNodeKind
+    agent_run_id: str | None = None
+    tool_name: str | None = None
     status: str
     model_name: str | None = None
     input_tokens: int = 0
@@ -50,7 +65,7 @@ class NodeRun(BaseModel):
     duration_ms: float = 0
     input_artifact_ids: list[str] = Field(default_factory=list)
     output_artifact_ids: list[str] = Field(default_factory=list)
-    trace_id: str
+    trace_id: str | None = None
 
 
 class WorkflowRun(BaseModel):

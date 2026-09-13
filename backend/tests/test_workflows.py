@@ -98,6 +98,57 @@ def test_aggregates_tokens_and_costs_by_workflow_and_node() -> None:
     assert [node_run.total_tokens for node_run in result.run.node_runs] == [14, 14]
 
 
+def test_runs_tool_node_before_agent_node() -> None:
+    agents = {
+        "project-manager": AgentDefinition(
+            id="project-manager",
+            name="Gerente de Projetos",
+            system_prompt="Create a plan from the transcript.",
+        )
+    }
+    tools = ToolRegistry()
+    tools.register("transcribe", lambda argument: f"transcript: {argument}")
+    runtime = AgentRuntime(
+        tools=tools,
+        memory=InMemoryStore(),
+        model=lambda prompt: f"model output: {prompt}",
+    )
+    workflow = WorkflowDefinition(
+        id="audio-planning",
+        name="Audio planning",
+        nodes=[
+            WorkflowNode(
+                id="transcription",
+                kind="tool",
+                tool_name="transcribe",
+                config={"output_type": "transcript"},
+            ),
+            WorkflowNode(
+                id="project-plan",
+                kind="agent",
+                agent_id="project-manager",
+                input_mapping={"transcript": "transcription"},
+            ),
+        ],
+        edges=[WorkflowEdge(source_node_id="transcription", target_node_id="project-plan")],
+        entry_node="transcription",
+        output_node="project-plan",
+    )
+
+    result = WorkflowRuntime(runtime, agents.__getitem__, tools=tools).run(
+        workflow,
+        {"audio_artifact_id": "audio-123"},
+    )
+
+    assert result.run.status == "completed"
+    assert [node_run.kind for node_run in result.run.node_runs] == ["tool", "agent"]
+    assert result.run.node_runs[0].tool_name == "transcribe"
+    assert result.run.node_runs[0].agent_run_id is None
+    assert result.run.artifacts[0].type == "transcript"
+    assert "transcript:" in result.run.artifacts[0].content
+    assert "transcript" in result.output.content
+
+
 def test_rejects_non_linear_workflow() -> None:
     workflow = WorkflowDefinition(
         id="invalid",
