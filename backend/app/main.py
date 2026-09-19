@@ -13,7 +13,7 @@ from app.graph.hello import OpenAIModel, OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
 from app.graph.workflow import WorkflowRuntime
 from app.memory.store import InMemoryStore
-from app.models.agent import AgentDefinition, DraftResponse, DraftSummary, RunRequest, RunResponse
+from app.models.agent import AgentDefinition, DraftResponse, DraftSummary, RunRequest, RunResponse, ToolDescriptor
 from app.models.workflow import WorkflowExecutionRequest, WorkflowRunResponse
 from app.observability.langfuse import LangfuseClient
 from app.observability.runs import RunStore
@@ -72,6 +72,13 @@ tools = ToolRegistry()
 tools.register_sandboxed(
     "echo",
     SandboxedTool(image="edda-agents-tool-runner", command=("python", "/runner/runner.py", "echo")),
+    ToolDescriptor(
+        name="echo",
+        display_name="Echo",
+        description="Runs a local test command in the tool sandbox.",
+        source="sandbox",
+        output_type="text",
+    ),
 )
 tools.register(
     "transcribe",
@@ -79,6 +86,18 @@ tools.register(
         model_size=os.getenv("WHISPER_MODEL", "small"),
         device=os.getenv("WHISPER_DEVICE", "cpu"),
         compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8"),
+    ),
+    ToolDescriptor(
+        name="transcribe",
+        display_name="Audio transcription",
+        description="Transcribes WAV, MP3, OGG, and Opus audio into a transcript artifact.",
+        source="native",
+        input_schema={
+            "type": "object",
+            "properties": {"audio_path": {"type": "string"}, "language": {"type": "string"}},
+            "required": ["audio_path"],
+        },
+        output_type="transcript",
     ),
 )
 runtime = AgentRuntime(
@@ -146,6 +165,13 @@ async def transcribe_upload(audio: UploadFile = File(...), language: str | None 
 
 
 app.post("/v1/tools/transcribe")(transcribe_upload)
+
+
+def list_tools() -> list[ToolDescriptor]:
+    return tools.list_descriptors()
+
+
+app.get("/v1/tools", response_model=list[ToolDescriptor])(list_tools)
 
 
 def run_workflow(request: WorkflowExecutionRequest) -> WorkflowRunResponse:

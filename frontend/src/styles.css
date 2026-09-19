@@ -205,10 +205,13 @@ button { cursor: pointer; }
 .workflow-node-row .workflow-node { width: min(100%, 540px); }
 .workflow-node--pm { border-color: rgba(102, 197, 163, .55); }
 .workflow-node--architect { border-color: rgba(228, 183, 104, .6); }
+.workflow-node--tool { border-color: rgba(126, 177, 222, .6); }
 .workflow-node__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; color: #092025; background: #78cdb5; }
 .workflow-node--architect .workflow-node__icon { color: #2d2110; background: #e4b768; }
+.workflow-node--tool .workflow-node__icon { color: #102438; background: #7eb1de; }
 .workflow-node span { display: block; color: #88bdb0; font-size: 9px; letter-spacing: .14em; }
 .workflow-node--architect span { color: #d7b676; }
+.workflow-node--tool span { color: #9ec6e7; }
 .workflow-node select { display: block; width: 100%; margin-top: 7px; border: 0; padding: 0 18px 0 0; color: #eef5f3; background: #101f25; font-size: 14px; font-weight: 700; color-scheme: dark; }
 .workflow-node select option { color: #eef5f3; background: #101f25; }
 .workflow-node small { display: block; margin-top: 7px; color: #8fa7ad; font-size: 11px; line-height: 1.45; }
@@ -222,6 +225,9 @@ button { cursor: pointer; }
 .workflow-connector div::after { content: ""; position: absolute; right: 0; top: -4px; width: 8px; height: 8px; border-top: 1px solid #5d8b8a; border-right: 1px solid #5d8b8a; transform: rotate(45deg); }
 .workflow-add-node { display: inline-flex; align-items: center; justify-self: center; gap: 7px; margin-top: 18px; border: 1px dashed #3c676d; border-radius: 8px; padding: 9px 13px; color: #a6d8cd; background: rgba(18, 44, 45, .42); font-size: 11px; }
 .workflow-add-node:hover { border-color: #72cda9; color: #e5f2ef; }
+.workflow-add-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.workflow-add-node--tool { color: #afd1ec; background: rgba(24, 48, 69, .42); }
+.workflow-add-node:disabled { cursor: default; opacity: .45; }
 .workflow-input { margin-top: 18px; padding: 18px; border: 1px solid #213640; border-radius: 12px; background: rgba(14, 24, 30, .9); }
 .workflow-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; color: #819aa2; font-size: 11px; }
 .composer-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 9px; padding: 11px 15px; color: #0b1d24; background: linear-gradient(135deg, #e4b768, #71c5b7); font-weight: 700; white-space: nowrap; }

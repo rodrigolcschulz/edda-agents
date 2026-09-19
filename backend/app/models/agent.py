@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,17 @@ class ToolDefinition(BaseModel):
     name: str
     description: str
     requires_confirmation: bool = False
+
+
+class ToolDescriptor(BaseModel):
+    name: str
+    display_name: str
+    description: str
+    source: Literal["native", "sandbox", "mcp"]
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_type: str
+    requires_confirmation: bool = False
+    mcp_server_id: str | None = None
 
 
 class McpServerDefinition(BaseModel):

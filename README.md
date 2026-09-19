@@ -139,6 +139,7 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] Persistência de definições de workflow com versionamento automático.
 - [x] API de workflows: salvar, listar, carregar e apagar definições.
 - [x] Canvas visual de workflows lineares com seleção, adição, remoção, reordenação e gerenciamento de workflows salvos.
+- [x] Catálogo de tools com metadados e seletor dinâmico de nós `tool` no canvas (`GET /v1/tools`).
 - [~] Persistência de artefatos e referências aos arquivos de entrada.
 - [ ] Branching, transforms, conditions e approvals no canvas.
 - [ ] Execução assíncrona, retries e retomada por checkpoint.
@@ -203,7 +204,7 @@ agentforge/
 
 ## 8. Próximo passo imediato
 
-A **Fase 5** já possui execução, tools, transcrição e persistência de definições. O próximo avanço é evoluir o canvas linear para suportar transforms, validação de schemas, branching, condições, aprovações humanas e execução assíncrona com retries e checkpoint.
+A **Fase 5** já possui execução, tools, catálogo de tools, transcrição e persistência de definições. O próximo avanço é evoluir o canvas linear para suportar transforms, validação de schemas, branching, condições, aprovações humanas e execução assíncrona com retries e checkpoint. O MCP continua separado como provider: suas capacidades serão publicadas no mesmo catálogo, mas executadas pelo gateway MCP com allowlist própria.
 
 ## Observabilidade: frontend vs Langfuse
 
@@ -276,6 +277,7 @@ Endpoints principais de workflows:
 - `DELETE /v1/workflows/{workflow_id}` — remove uma definição.
 - `POST /v1/workflows/run` — executa um workflow linear.
 - `POST /v1/tools/transcribe` — recebe WAV, MP3, OGG ou Opus via multipart e retorna um artefato de transcrição.
+- `GET /v1/tools` — lista tools disponíveis, origem, schema de entrada e tipo de artefato de saída.
 
 Para iniciar a sandbox React em desenvolvimento:
 

@@ -79,6 +79,16 @@ type WorkflowRunResponse = {
   output: WorkflowArtifact;
 };
 type WorkflowSummary = { id: string; name: string; version: number };
+type ToolDescriptor = {
+  name: string;
+  display_name: string;
+  description: string;
+  source: "native" | "sandbox" | "mcp";
+  input_schema: Record<string, unknown>;
+  output_type: string;
+  requires_confirmation: boolean;
+  mcp_server_id: string | null;
+};
 type SavedWorkflowResponse = {
   workflow: {
     id: string;
@@ -183,6 +193,7 @@ export default function App() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [selectedAgentId, setSelectedAgentId] = useState(defaultAgent.id);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [tools, setTools] = useState<ToolDescriptor[]>([]);
   const [workflowInput, setWorkflowInput] = useState("A empresa precisa criar um pipeline diário de dados de vendas a partir de arquivos CSV. O processo deve validar, deduplicar, enriquecer e disponibilizar os dados aprovados para relatórios.");
   const [workflowName, setWorkflowName] = useState("Planejamento do ETL de vendas");
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowDraftNode[]>([
@@ -227,6 +238,13 @@ export default function App() {
     fetch(`${API_URL}/v1/workflows`)
       .then((result) => result.ok ? result.json() as Promise<WorkflowSummary[]> : [])
       .then(setSavedWorkflows)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/v1/tools`)
+      .then((result) => result.ok ? result.json() as Promise<ToolDescriptor[]> : [])
+      .then(setTools)
       .catch(() => undefined);
   }, []);
 
@@ -360,8 +378,18 @@ export default function App() {
     setWorkflowNodes((current) => [...current, { id: `node-${Date.now()}`, agent_id: fallbackAgent }]);
   }
 
+  function addWorkflowToolNode() {
+    const firstTool = tools[0];
+    if (!firstTool) return;
+    setWorkflowNodes((current) => [...current, { id: `node-${Date.now()}`, kind: "tool", tool_name: firstTool.name }]);
+  }
+
   function updateWorkflowNode(nodeId: string, agentId: string) {
     setWorkflowNodes((current) => current.map((node) => node.id === nodeId ? { ...node, agent_id: agentId } : node));
+  }
+
+  function updateWorkflowTool(nodeId: string, toolName: string) {
+    setWorkflowNodes((current) => current.map((node) => node.id === nodeId ? { ...node, kind: "tool", tool_name: toolName, agent_id: undefined } : node));
   }
 
   function removeWorkflowNode(nodeId: string) {
@@ -386,7 +414,7 @@ export default function App() {
       nodes: workflowNodes.map((node, index) => ({
         id: node.id,
         kind: node.kind ?? "agent",
-        agent_id: node.agent_id,
+        ...(node.kind === "tool" ? { tool_name: node.tool_name } : { agent_id: node.agent_id }),
         ...(index === 0 ? {} : { input_mapping: { previous_artifact: workflowNodes[index - 1].id, source_problem: "input" } }),
       })),
       edges: workflowNodes.slice(1).map((node, index) => ({ source_node_id: workflowNodes[index].id, target_node_id: node.id })),
@@ -621,7 +649,7 @@ export default function App() {
                   <label>Nome do workflow</label>
                   <input value={workflowName} onChange={(event) => setWorkflowName(event.target.value)} />
                 </div>
-                <div className="workflow-config__meta"><span>Composição atual</span><strong>{workflowNodes.length} agentes</strong></div>
+                <div className="workflow-config__meta"><span>Composição atual</span><strong>{workflowNodes.filter((node) => (node.kind ?? "agent") === "agent").length} agentes · {workflowNodes.filter((node) => node.kind === "tool").length} tools</strong></div>
               </div>
 
               <div className="workflow-saved">
@@ -651,16 +679,24 @@ export default function App() {
               <div className="workflow-canvas">
                 {workflowNodes.map((node, index) => {
                   const selectedAgent = [...workflowDemoAgents, ...agents].find((agent) => agent.id === node.agent_id);
+                  const selectedTool = tools.find((tool) => tool.name === node.tool_name);
+                  const isToolNode = node.kind === "tool";
                   return (
                     <div className="workflow-node-row" key={node.id}>
-                      <div className={`workflow-node ${index === 0 ? "workflow-node--pm" : "workflow-node--architect"}`}>
-                        <div className="workflow-node__icon">{index === 0 ? <Bot size={18} /> : <Layers3 size={18} />}</div>
+                      <div className={`workflow-node ${isToolNode ? "workflow-node--tool" : index === 0 ? "workflow-node--pm" : "workflow-node--architect"}`}>
+                        <div className="workflow-node__icon">{isToolNode ? <Wand2 size={18} /> : index === 0 ? <Bot size={18} /> : <Layers3 size={18} />}</div>
                         <div>
-                          <span>AGENT · {String(index + 1).padStart(2, "0")}</span>
-                          <select value={node.agent_id} onChange={(event) => updateWorkflowNode(node.id, event.target.value)} aria-label={`Agent node ${index + 1}`}>
-                            {[...workflowDemoAgents, ...agents.filter((agent) => !workflowDemoAgents.some((demoAgent) => demoAgent.id === agent.id))].map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-                          </select>
-                          <small>{selectedAgent?.id ?? "Selecione um agente salvo."}</small>
+                          <span>{isToolNode ? "TOOL" : "AGENT"} · {String(index + 1).padStart(2, "0")}</span>
+                          {isToolNode ? (
+                            <select value={node.tool_name ?? ""} onChange={(event) => updateWorkflowTool(node.id, event.target.value)} aria-label={`Tool node ${index + 1}`}>
+                              {tools.map((tool) => <option key={tool.name} value={tool.name}>{tool.display_name}</option>)}
+                            </select>
+                          ) : (
+                            <select value={node.agent_id} onChange={(event) => updateWorkflowNode(node.id, event.target.value)} aria-label={`Agent node ${index + 1}`}>
+                              {[...workflowDemoAgents, ...agents.filter((agent) => !workflowDemoAgents.some((demoAgent) => demoAgent.id === agent.id))].map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                            </select>
+                          )}
+                          <small>{isToolNode ? `${selectedTool?.source ?? "tool"} · ${selectedTool?.output_type ?? "output"}` : selectedAgent?.id ?? "Selecione um agente salvo."}</small>
                         </div>
                         <div className="workflow-node__controls">
                           <button type="button" onClick={() => moveWorkflowNode(index, -1)} disabled={index === 0} aria-label="Move node up">↑</button>
@@ -672,7 +708,10 @@ export default function App() {
                     </div>
                   );
                 })}
-                <button type="button" className="workflow-add-node" onClick={addWorkflowNode}><Plus size={16} /> Add agent node</button>
+                <div className="workflow-add-actions">
+                  <button type="button" className="workflow-add-node" onClick={addWorkflowNode}><Plus size={16} /> Add agent node</button>
+                  <button type="button" className="workflow-add-node workflow-add-node--tool" onClick={addWorkflowToolNode} disabled={!tools.length}><Wand2 size={16} /> Add tool node</button>
+                </div>
               </div>
 
               <form className="workflow-input" onSubmit={runWorkflow}>
