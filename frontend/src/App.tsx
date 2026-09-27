@@ -108,6 +108,7 @@ type TranscriptionResponse = {
   confidence: number | null;
   model: string;
   provider: string;
+  source_artifact_id?: string;
 };
 type DraftResponse = { agent: typeof defaultAgent; version: number };
 
@@ -488,7 +489,10 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workflow: currentWorkflowDefinition(),
-          input: { problem: workflowInput },
+          input: {
+            problem: workflowInput,
+            ...(transcription?.source_artifact_id ? { source_artifact_id: transcription.source_artifact_id } : {}),
+          },
           user_id: "local-user",
         }),
       });

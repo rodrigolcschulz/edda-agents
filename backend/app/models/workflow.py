@@ -47,6 +47,11 @@ class Artifact(BaseModel):
     type: str
     content: Any
     source_node_id: str | None = None
+    bucket: str | None = None
+    object_key: str | None = None
+    content_type: str | None = None
+    size_bytes: int | None = None
+    sha256: str | None = None
 
 
 class NodeRun(BaseModel):

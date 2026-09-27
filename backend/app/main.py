@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile, st
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.store import AgentDraftStore
+from app.artifacts.store import ArtifactStore
 from app.graph.checkpoint import PostgresCheckpointer
 from app.graph.hello import OpenAIModel, OllamaModel, deterministic_model
 from app.graph.runtime import AgentRuntime
@@ -27,11 +28,12 @@ checkpointer: PostgresCheckpointer | None = None
 draft_store: AgentDraftStore | None = None
 run_store: RunStore | None = None
 workflow_store: WorkflowDefinitionStore | None = None
+artifact_store: ArtifactStore | None = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global checkpointer, draft_store, run_store, workflow_store
+    global checkpointer, draft_store, run_store, workflow_store, artifact_store
     database_url = os.getenv("DATABASE_URL")
     draft_store = AgentDraftStore(database_url)
     draft_store.setup()
@@ -39,6 +41,17 @@ async def lifespan(_: FastAPI):
     run_store.setup()
     workflow_store = WorkflowDefinitionStore(database_url)
     workflow_store.setup()
+    artifact_endpoint = os.getenv("ARTIFACT_S3_ENDPOINT")
+    if artifact_endpoint:
+        artifact_store = ArtifactStore(
+            database_url=database_url,
+            endpoint_url=artifact_endpoint,
+            access_key=os.getenv("ARTIFACT_S3_ACCESS_KEY"),
+            secret_key=os.getenv("ARTIFACT_S3_SECRET_KEY"),
+            bucket=os.getenv("ARTIFACT_S3_BUCKET", "edda-artifacts"),
+            region=os.getenv("ARTIFACT_S3_REGION", "us-east-1"),
+        )
+        artifact_store.setup()
     runtime.set_run_store(run_store)
     if database_url:
         checkpointer = PostgresCheckpointer(database_url)
@@ -59,6 +72,9 @@ async def lifespan(_: FastAPI):
     if workflow_store:
         workflow_store.close()
         workflow_store = None
+    if artifact_store:
+        artifact_store.close()
+        artifact_store = None
 
 
 app = FastAPI(title="AgentForge API", version="0.1.0", lifespan=lifespan)
@@ -151,9 +167,20 @@ async def transcribe_upload(audio: UploadFile = File(...), language: str | None 
                     raise HTTPException(status_code=413, detail="Audio file must be smaller than 25 MB.")
                 temporary_file.write(chunk)
 
+        source_artifact = None
+        if artifact_store:
+            source_artifact = artifact_store.store_file(
+                temporary_path,
+                filename,
+                content_type or "application/octet-stream",
+                metadata={"purpose": "workflow_input"},
+            )
         argument = json.dumps({"audio_path": temporary_path, "language": language})
         result = tools.execute("transcribe", argument)
-        return json.loads(result)
+        response = json.loads(result)
+        if source_artifact:
+            response["source_artifact_id"] = source_artifact["id"]
+        return response
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
@@ -186,7 +213,7 @@ def run_workflow(request: WorkflowExecutionRequest) -> WorkflowRunResponse:
             raise HTTPException(status_code=404, detail=f"Agent draft '{agent_id}' not found.")
         return saved[1]
 
-    workflow_runtime = WorkflowRuntime(runtime, resolve_agent, run_store, tools)
+    workflow_runtime = WorkflowRuntime(runtime, resolve_agent, run_store, tools, artifact_store)
     return workflow_runtime.run(request.workflow, request.input, request.user_id)
 
 

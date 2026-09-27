@@ -140,7 +140,7 @@ Todas as tabelas com `tenant_id` + Row Level Security (RLS) no Postgres.
 - [x] API de workflows: salvar, listar, carregar e apagar definições.
 - [x] Canvas visual de workflows lineares com seleção, adição, remoção, reordenação e gerenciamento de workflows salvos.
 - [x] Catálogo de tools com metadados e seletor dinâmico de nós `tool` no canvas (`GET /v1/tools`).
-- [~] Persistência de artefatos e referências aos arquivos de entrada.
+- [x] Persistência de artefatos e referências aos arquivos de entrada em MinIO/S3, com metadados e vínculos aos runs no Postgres.
 - [ ] Branching, transforms, conditions e approvals no canvas.
 - [ ] Execução assíncrona, retries e retomada por checkpoint.
 

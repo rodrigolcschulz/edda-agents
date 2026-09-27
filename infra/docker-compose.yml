@@ -32,12 +32,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
       tool-runner:
         condition: service_started
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://edda_agents:edda_agents@postgres:5432/edda_agents
+      ARTIFACT_S3_ENDPOINT: http://minio:9000
+      ARTIFACT_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      ARTIFACT_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      ARTIFACT_S3_BUCKET: edda-artifacts
+      ARTIFACT_S3_REGION: ${MINIO_REGION:-us-east-1}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${OPEN_AI_API_KEY:-}}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-web:3000}

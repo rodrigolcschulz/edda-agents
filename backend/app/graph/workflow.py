@@ -3,6 +3,7 @@ from collections.abc import Callable, Mapping
 from time import perf_counter
 from typing import Any
 
+from app.artifacts.store import ArtifactStore
 from app.graph.runtime import AgentRuntime
 from app.models.agent import AgentDefinition, RunRequest
 from app.models.workflow import (
@@ -27,11 +28,13 @@ class WorkflowRuntime:
         resolve_agent: AgentResolver,
         run_store: RunStore | None = None,
         tools: ToolRegistry | None = None,
+        artifact_store: ArtifactStore | None = None,
     ) -> None:
         self._agent_runtime = agent_runtime
         self._resolve_agent = resolve_agent
         self._run_store = run_store
         self._tools = tools
+        self._artifact_store = artifact_store
 
     def run(self, workflow: WorkflowDefinition, input_data: Mapping[str, Any], user_id: str = "workflow-user") -> WorkflowRunResponse:
         workflow_run = WorkflowRun(
@@ -44,6 +47,10 @@ class WorkflowRuntime:
         if self._run_store:
             self._run_store.start_workflow(workflow, workflow_run, user_id)
         try:
+            external_input_artifact_ids = self._input_artifact_ids(workflow_run.input)
+            if self._artifact_store:
+                for artifact_id in external_input_artifact_ids:
+                    self._artifact_store.link_to_run(workflow_run.id, artifact_id, "input")
             ordered_nodes = self._linear_order(workflow)
             artifacts: dict[str, Artifact] = {}
             for node in ordered_nodes:
@@ -84,6 +91,8 @@ class WorkflowRuntime:
                     content=content,
                     source_node_id=node.id,
                 )
+                if self._artifact_store:
+                    artifact = self._artifact_store.store_content(artifact, workflow_run.id)
                 artifacts[node.id] = artifact
                 workflow_run.artifacts.append(artifact)
                 workflow_run.node_runs.append(
@@ -101,7 +110,11 @@ class WorkflowRuntime:
                         estimated_cost=response.estimated_cost if response else 0,
                         cost_currency=response.cost_currency if response else "USD",
                         duration_ms=(perf_counter() - node_started_at) * 1000,
-                        input_artifact_ids=input_artifact_ids,
+                        input_artifact_ids=(
+                            [*external_input_artifact_ids, *input_artifact_ids]
+                            if node.id == ordered_nodes[0].id
+                            else input_artifact_ids
+                        ),
                         output_artifact_ids=[artifact.id],
                         trace_id=response.trace_id if response else workflow_run.trace_id,
                     )
@@ -182,3 +195,22 @@ class WorkflowRuntime:
         if not context:
             context = {"input": input_data, "artifacts": {key: value.content for key, value in artifacts.items()}}
         return json.dumps(context, ensure_ascii=False, indent=2, default=str)
+
+    @staticmethod
+    def _input_artifact_ids(value: Any) -> list[str]:
+        artifact_ids: list[str] = []
+
+        def visit(item: Any) -> None:
+            if isinstance(item, dict):
+                for key, nested_value in item.items():
+                    if key == "artifact_id" or key.endswith("_artifact_id"):
+                        if isinstance(nested_value, str) and nested_value not in artifact_ids:
+                            artifact_ids.append(nested_value)
+                    else:
+                        visit(nested_value)
+            elif isinstance(item, list):
+                for nested_value in item:
+                    visit(nested_value)
+
+        visit(value)
+        return artifact_ids

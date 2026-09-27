@@ -4,13 +4,16 @@
 
 O MinIO presente no `docker-compose.yml` e um object storage compatível com a API do Amazon S3. Ele roda localmente para dar ao ambiente uma camada de armazenamento de objetos sem depender da AWS.
 
-No estado atual deste repositorio, o MinIO esta configurado principalmente como backend de uploads e eventos do Langfuse:
+No estado atual deste repositorio, o MinIO atende tanto aos uploads/eventos do Langfuse quanto aos artefatos de negocio da Edda Agents:
 
 ```text
-Langfuse web/worker -> API S3 -> MinIO local -> volume langfuse_minio_data
+Langfuse web/worker -> bucket `langfuse` -> MinIO local
+Edda Agents -> bucket `edda-artifacts` -> MinIO local
 ```
 
-Ele ainda nao e usado diretamente pela Edda Agents para armazenar audios, artefatos de workflow ou dados de um datalake.
+O endpoint de transcricao armazena o audio original e devolve `source_artifact_id`. O runtime grava os outputs dos nos de workflow no mesmo bucket e registra metadados/checksum e vinculos de entrada/saida no Postgres. O objeto do Langfuse e os artefatos do produto ficam em buckets separados.
+
+Ainda nao ha uma API publica para recuperar ou baixar um artefato pelo ID; o uso atual preserva os objetos e sua proveniencia para etapas seguintes do runtime.
 
 ## 2. MinIO e S3 sao a mesma coisa?
 
